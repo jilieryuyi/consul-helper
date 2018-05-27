@@ -3,49 +3,52 @@ package consul
 import (
 	"github.com/hashicorp/consul/api"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 )
 
 type Session struct {
 	session *api.Session
-	timeout int64 //seconds
-	ID string
+}
+type ISession interface {
+	Create(timeout int64) (string, error)
+	Destroy(sessionId string) error
+	Renew(sessionId string) error
 }
 
-func NewSession(session *api.Session, timeout int64) *Session {
+func NewSession(session *api.Session) ISession {
 	s := &Session{
 		session:session,
-		timeout:timeout,
-		ID:"",
 	}
-	s.create()
 	return s
 }
+
 // create a session
-func (session *Session) create() {
+// timeout unit is seconds
+// return session id and error, if everything is ok, error should be nil
+func (session *Session) Create(timeout int64) (string, error) {
 	se := &api.SessionEntry{
 		Behavior : api.SessionBehaviorDelete,
-		//TTL: fmt.Sprintf("%ds", session.timeout),
 	}
-	if session.timeout > 0 {
-		se.TTL = fmt.Sprintf("%ds", session.timeout)
+	// timeout min value is 10 seconds
+	if timeout > 0 && timeout < 10 {
+		timeout = 10
+	}
+	if timeout > 0 {
+		se.TTL = fmt.Sprintf("%ds", timeout)
 	}
 	ID, _, err := session.session.Create(se, nil)
-	if err != nil {
-		log.Errorf("create session error: %+v", err)
-		return
-	}
-	session.ID = ID
+	return ID, err
 }
 
 // destory a session
-func (session *Session) Destroy() error {
-	_, err := session.session.Destroy(session.ID, nil)
+// sessionId is the value return from Create
+func (session *Session) Destroy(sessionId string) error {
+	_, err := session.session.Destroy(sessionId, nil)
 	return err
 }
 
 // refresh a session
-func (session *Session) Renew() error {
-	_, _, err := session.session.Renew(session.ID, nil)
+// sessionId is the value return from Create
+func (session *Session) Renew(sessionId string) error {
+	_, _, err := session.session.Renew(sessionId, nil)
 	return err
 }

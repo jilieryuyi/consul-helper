@@ -1,54 +1,45 @@
 package consul
 
 import (
-	log "github.com/sirupsen/logrus"
 	"github.com/hashicorp/consul/api"
 )
 
 type Lock struct {
-	Key string
-	session *Session
-	Kv *api.KV
+	sessionId string
+	kv *api.KV
 }
 
-func NewLock(session *Session, Kv *api.KV, key string) *Lock {
+type ILock interface {
+	Lock(key string, timeout int64) (bool, error)
+	Unlock(key string) (bool, error)
+	Delete(key string) error
+}
+
+func NewLock(sessionId string, kv *api.KV) ILock {
 	con := &Lock{
-		Key: key,
+		sessionId: sessionId,
+		kv: kv,
 	}
-	con.session = session
-	con.Kv      = Kv
 	return con
 }
 
-// timeOut seconds
-func (con *Lock) Lock() (bool, error) {
-	p := &api.KVPair{Key: con.Key, Value: nil, Session: con.session.ID}
-	success, _, err := con.Kv.Acquire(p, nil)
-	if err != nil {
-		log.Errorf("lock error: %+v", err)
-		return false, err
-	}
-	return success, nil
-
+// timeout seconds, max lock time, min value is 10 seconds
+func (con *Lock) Lock(key string, timeout int64) (bool, error) {
+	p := &api.KVPair{Key: key, Value: nil, Session: con.sessionId}
+	success, _, err := con.kv.Acquire(p, nil)
+	return success, err
 }
 
 // unlock
-func (con *Lock) Unlock() (bool, error) {
-	p := &api.KVPair{Key: con.Key, Value: nil, Session: con.session.ID}
-	success, _, err := con.Kv.Release(p, nil)
-	if err != nil {
-		log.Errorf("unlock error: %+v", err)
-		return false, err
-	}
+func (con *Lock) Unlock(key string) (bool, error) {
+	p := &api.KVPair{Key: key, Value: nil, Session: con.sessionId}
+	success, _, err := con.kv.Release(p, nil)
 	return success, err
 
 }
 
 // force unlock
-func (con *Lock) Delete() {
-	_, err := con.Kv.Delete(con.Key, nil)
-	if err != nil {
-		log.Errorf("delete errpor: %v", err)
-		return
-	}
+func (con *Lock) Delete(key string) error {
+	_, err := con.kv.Delete(key, nil)
+	return err
 }

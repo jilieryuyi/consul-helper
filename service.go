@@ -19,7 +19,7 @@ const (
 )
 var membersEmpty   = errors.New("members is empty")
 var leaderNotFound = errors.New("leader not found")
-
+var notRegister    = errors.New("service not register")
 type ServiceMember struct {
 	IsLeader bool
 	ServiceID string
@@ -40,13 +40,20 @@ type Service struct {
 	agent *api.Agent //consul agent
 	status int // register status
 	lock *sync.Mutex //sync lock
-	session *Session
+	session ISession
 	Kv *api.KV
 	health *api.Health
 	leader bool
 	onleader []OnLeaderFunc
-	//lockKey string
-	consulLock *Lock
+	lockKey string
+	consulLock ILock
+	sessionId string
+}
+
+type IService interface {
+	Deregister() error
+	Register() error
+	UpdateTtl() error
 }
 
 type ServiceOption func(s *Service)
@@ -64,13 +71,6 @@ func SetOnLeader(f ...OnLeaderFunc) ServiceOption {
 		s.onleader = append(s.onleader, f...)
 	}
 }
-
-//func SetLockKey(lock *Lock) ServiceOption  {
-//	return func(s *Service) {
-//		s.consulLock = lock//NewLock(s.session, s.Kv, lockKey)
-//		//s.lockKey = lockKey
-//	}
-//}
 
 // set interval
 func SetInterval(interval time.Duration) ServiceOption {
@@ -93,11 +93,19 @@ func NewService(
 	host string,
 	port int,
 	opts ...ServiceOption,
-) *Service {
+) IService {
 
 	consulConfig        := api.DefaultConfig()
 	consulConfig.Address = address//ctx.Config.ConsulAddress
 	c, err         := api.NewClient(consulConfig)
+
+	if err != nil {
+		log.Panicf("%v", err)
+	}
+	session        := c.Session()
+	kv             := c.KV()
+	mySession      := NewSession(session)
+	sessionId, err := mySession.Create(10)
 
 	if err != nil {
 		log.Panicf("%v", err)
@@ -112,19 +120,20 @@ func NewService(
 		status      : 0,
 		leader      : false,
 		lock        : new(sync.Mutex),
-		consulLock  : nil,//NewLock(),
+		lockKey     : lockKey,
+		client      : c,
+		Kv          : kv,
+		session     : mySession,
+		consulLock  : NewLock(sessionId, kv),
+		ServiceID   : fmt.Sprintf("%s-%s-%d", name, host, port),
+		agent       : c.Agent(),
+		health      : c.Health(),
+		sessionId   : sessionId,
 	}
-	sev.client    = c
-	sev.Kv        = c.KV()
-	sev.session   = NewSession(c.Session(), 10)
 	for _, opt := range opts {
 		opt(sev)
 	}
-	sev.consulLock = NewLock(sev.session, sev.Kv, lockKey)
-	sev.ServiceID = fmt.Sprintf("%s-%s-%d", name, host, port)
-	sev.agent     = sev.client.Agent()
-	sev.health    = sev.client.Health()
-	go sev.check()
+	//go sev.check()
 	return sev
 }
 
@@ -141,17 +150,6 @@ func (sev *Service) Deregister() error {
 	return err
 }
 
-func (sev *Service) updateTtl() {
-	if sev.status & Registered <= 0 {
-		return
-	}
-	//log.Debugf("current node %v:%v is leader=%v", sev.ServiceIp, sev.ServicePort, sev.leader)
-	err := sev.agent.UpdateTTL(sev.ServiceID, fmt.Sprintf("isleader:%v", sev.leader), "passing")
-	if err != nil {
-		log.Errorf("update ttl of service error: ", err.Error())
-	}
-}
-
 func (sev *Service) Register() error {
 	sev.lock.Lock()
 	if sev.status & Registered <= 0 {
@@ -166,98 +164,24 @@ func (sev *Service) Register() error {
 		Port:    sev.ServicePort,
 		Tags:    []string{fmt.Sprintf("isleader:%v", sev.leader)},
 	}
-	//log.Debugf("service register")
 	err := sev.agent.ServiceRegister(regis)
 	if err != nil {
-		return fmt.Errorf("initial register service '%s' host to consul error: %s", sev.ServiceName, err.Error())
+		return err
 	}
 	// initial register service check
 	check := api.AgentServiceCheck{TTL: fmt.Sprintf("%ds", sev.Ttl), Status: "passing"}
 	err = sev.agent.CheckRegister(&api.AgentCheckRegistration{
-			ID: sev.ServiceID,
-			Name: sev.ServiceName,
-			ServiceID: sev.ServiceID,
-			AgentServiceCheck: check,
-		})
-	if err != nil {
-		return fmt.Errorf("initial register service check to consul error: %s", err.Error())
-	}
-	return nil
+		ID: sev.ServiceID,
+		Name: sev.ServiceName,
+		ServiceID: sev.ServiceID,
+		AgentServiceCheck: check,
+	})
+	return err
 }
 
-func (sev *Service) Close() {
-	log.Infof("######################%v[%v] deregister", sev.ServiceName, sev.ServiceID)
-	sev.Deregister()
-	if sev.leader {
-		sev.consulLock.Unlock()
-		sev.consulLock.Delete()
-		sev.leader = false
+func (sev *Service) UpdateTtl() error {
+	if sev.status & Registered <= 0 {
+		return notRegister
 	}
-}
-
-func (sev *Service) GetServices(passingOnly bool) ([]*ServiceMember, error) {
-	members, _, err := sev.health.Service(sev.ServiceName, "", passingOnly, nil)
-	if err != nil {
-		return nil, err
-	}
-	//return members, err
-	data := make([]*ServiceMember, 0)
-	for _, v := range members {
-		//log.Debugf("GetServices： %+v", *v.Service)
-		m := &ServiceMember{}
-		if v.Checks.AggregatedStatus() == "passing" {
-			m.Status = statusOnline
-			m.IsLeader  = v.Service.Tags[0] == "isleader:true"
-		} else {
-			m.Status = statusOffline
-			m.IsLeader  = false//v.Service.Tags[0] == "isleader:true"
-		}
-		m.ServiceID = v.Service.ID//Tags[1]
-		m.ServiceIp = v.Service.Address
-		m.Port      = v.Service.Port
-		data        = append(data, m)
-	}
-	return data, nil
-}
-
-func (sev *Service) check() {
-	time.Sleep(time.Second)
-	success, err := sev.consulLock.Lock()
-	if err == nil {
-		sev.leader = success
-		for _, f := range sev.onleader {
-			go f(success)
-		}
-		sev.Register()
-	}
-	for {
-		//log.Debugf("onleader num %v ", len(sev.onleader))
-		success, err := sev.consulLock.Lock()
-		if err == nil {
-			if success != sev.leader {
-				sev.leader = success
-				for _, f := range sev.onleader {
-					go f(success)
-				}
-				sev.Register()
-			}
-		}
-		sev.session.Renew()
-		sev.updateTtl()
-		time.Sleep(time.Second * 3)
-	}
-}
-
-func (sev *Service) GetLeader() (string, int, error) {
-	members, _ := sev.GetServices(true)
-	if members == nil {
-		return "", 0, membersEmpty
-	}
-	for _, v := range members {
-		//log.Debugf("getLeader: %+v", *v)
-		if v.IsLeader {
-			return v.ServiceIp, v.Port, nil
-		}
-	}
-	return "", 0, leaderNotFound
+	return sev.agent.UpdateTTL(sev.ServiceID, fmt.Sprintf("isleader:%v", sev.leader), "passing")
 }
