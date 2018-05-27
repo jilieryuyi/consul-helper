@@ -3,6 +3,7 @@ package consul
 import (
 	"testing"
 	"github.com/hashicorp/consul/api"
+	"bytes"
 )
 
 func TestNewKv(t *testing.T) {
@@ -13,9 +14,9 @@ func TestNewKv(t *testing.T) {
 	kv := NewKv(client.KV())
 
 	key   := "a"
-	value := "a"
+	value := []byte("a")
 
-	err := kv.Set(key, "a")
+	err := kv.Set(key, value)
 	if err != nil {
 		t.Errorf("set kv error")
 	}
@@ -25,7 +26,7 @@ func TestNewKv(t *testing.T) {
 		t.Errorf("get kv error")
 	}
 
-	if v != value {
+	if !bytes.Equal(v, value) {
 		t.Errorf("set kv error")
 	}
 
@@ -39,7 +40,7 @@ func TestNewKv(t *testing.T) {
 		t.Errorf("get kv error")
 	}
 
-	if v == value {
+	if bytes.Equal(v, value) {
 		t.Errorf("get kv error")
 	}
 }
