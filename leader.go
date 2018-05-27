@@ -21,11 +21,12 @@ type Leader struct {
 }
 type ILeader interface {
 	Deregister() error
-	Register() error
+	Register() (*ServiceMember, error)
 	UpdateTtl() error
 	GetServices(passingOnly bool) ([]*ServiceMember, error)
 	Select(onLeader func(*ServiceMember))
 	Get() (*ServiceMember, error)
+	Free()
 }
 
 func NewLeader(
@@ -65,11 +66,19 @@ func NewLeader(
 }
 
 func (sev *Leader) Deregister() error {
-	return sev.Deregister()
+	return sev.service.Deregister()
 }
 
-func (sev *Leader) Register() error {
-	return sev.service.Register()
+func (sev *Leader) Register() (*ServiceMember, error) {
+	err := sev.service.Register()
+	leader := &ServiceMember{
+		IsLeader: sev.leader,
+		ServiceID: sev.ServiceID,
+		Status: statusOnline,
+		ServiceIp: sev.ServiceHost,
+		Port: sev.ServicePort,
+	}
+	return leader, err
 }
 
 func (sev *Leader) UpdateTtl() error {
@@ -144,4 +153,11 @@ func (sev *Leader) Get() (*ServiceMember, error) {
 		}
 	}
 	return nil, leaderNotFound
+}
+
+// force free a leader
+func (sev *Leader) Free() {
+	sev.consulLock.Delete(sev.lockKey)
+	sev.Deregister()
+	sev.leader = false
 }
