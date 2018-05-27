@@ -3,6 +3,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/hashicorp/consul/api"
 	"time"
+	"fmt"
 )
 
 type Leader struct {
@@ -14,14 +15,17 @@ type Leader struct {
 	sessionId string
 	health *api.Health
 	ServiceName string
+	ServiceID string
+	ServiceHost string
+	ServicePort int
 }
 type ILeader interface {
 	Deregister() error
 	Register() error
 	UpdateTtl() error
 	GetServices(passingOnly bool) ([]*ServiceMember, error)
-	SelectLeader(onLeader func(bool))
-	GetLeader() (*ServiceMember, error)
+	Select(onLeader func(*ServiceMember))
+	Get() (*ServiceMember, error)
 }
 
 func NewLeader(
@@ -43,7 +47,7 @@ func NewLeader(
 	mySession      := NewSession(session)
 	sessionId, err := mySession.Create(10)
 
-	sev := NewService(address, lockKey, name, host, port, opts...)
+	sev := NewService(c.Agent(), name, host, port, opts...)
 	l   := &Leader{
 		service     : sev,
 		consulLock  : NewLock(sessionId, kv),
@@ -53,6 +57,9 @@ func NewLeader(
 		sessionId   : sessionId,
 		health      : c.Health(),
 		ServiceName : name,
+		ServiceID   : fmt.Sprintf("%s-%s-%d", name, host, port),
+		ServiceHost : host,
+		ServicePort : port,
 	}
 	return l
 }
@@ -93,12 +100,20 @@ func (sev *Leader) GetServices(passingOnly bool) ([]*ServiceMember, error) {
 	return data, nil
 }
 
-func (sev *Leader) SelectLeader(onLeader func(bool)) {
+func (sev *Leader) Select(onLeader func(*ServiceMember)) {
+	leader := &ServiceMember{
+		IsLeader: false,
+		ServiceID: sev.ServiceID,
+		Status: statusOnline,
+		ServiceIp: sev.ServiceHost,
+		Port: sev.ServicePort,
+	}
 	go func() {
 		success, err := sev.consulLock.Lock(sev.lockKey, 10)
 		if err == nil {
 			sev.leader = success
-			go onLeader(success)
+			leader.IsLeader = success
+			go onLeader(leader)
 			sev.Register()
 		}
 		for {
@@ -106,7 +121,8 @@ func (sev *Leader) SelectLeader(onLeader func(bool)) {
 			if err == nil {
 				if success != sev.leader {
 					sev.leader = success
-					go onLeader(success)
+					leader.IsLeader = success
+					go onLeader(leader)
 					sev.Register()
 				}
 			}
@@ -117,13 +133,12 @@ func (sev *Leader) SelectLeader(onLeader func(bool)) {
 	}()
 }
 
-func (sev *Leader) GetLeader() (*ServiceMember, error) {
+func (sev *Leader) Get() (*ServiceMember, error) {
 	members, _ := sev.GetServices(true)
 	if members == nil {
 		return nil, membersEmpty
 	}
 	for _, v := range members {
-		//log.Debugf("getLeader: %+v", *v)
 		if v.IsLeader {
 			return v, nil
 		}
