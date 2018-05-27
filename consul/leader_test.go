@@ -22,11 +22,13 @@ func TestNewLeader(t *testing.T) {
 	leader1.Free()
 	leader1.Select(func(member *ServiceMember) {
 		logrus.Infof("1=>%+v", member)
+		// leader1 should be leader
 		if !member.IsLeader {
 			t.Errorf("select leader error")
 		}
 	})
 	//defer leader1.Free()
+	// wait a second, and start anther service
 	time.Sleep(time.Second)
 
 	leader2 := NewLeader(
@@ -37,6 +39,7 @@ func TestNewLeader(t *testing.T) {
 		7771,
 	)
 	leader2.Select(func(member *ServiceMember) {
+		//leader2 should not be leader
 		logrus.Infof("2=>%+v", member)
 		if member.IsLeader {
 			t.Errorf("select leader error")
