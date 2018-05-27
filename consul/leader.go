@@ -8,11 +8,9 @@ import (
 
 type Leader struct {
 	service IService
-	consulLock ILock
-	lockKey string
+	lock *LockEntity
 	leader bool
-	session ISession
-	sessionId string
+	session *SessionEntity
 	health *api.Health
 	ServiceName string
 	ServiceID string
@@ -45,23 +43,25 @@ func NewLeader(
 	}
 	session        := c.Session()
 	kv             := c.KV()
-	mySession      := NewSession(session)
-	sessionId, err := mySession.Create(10)
+	mySession      := NewSessionEntity(session, 10)
+	sessionId, err := mySession.Create()
 
 	sev := NewService(c.Agent(), name, host, port, opts...)
 	l   := &Leader{
 		service     : sev,
-		consulLock  : NewLock(sessionId, kv),
-		lockKey     : lockKey,
+		lock        : NewLockEntity(sessionId, kv, lockKey, 10),
 		leader      : false,
 		session     : mySession,
-		sessionId   : sessionId,
 		health      : c.Health(),
 		ServiceName : name,
 		ServiceID   : fmt.Sprintf("%s-%s-%d", name, host, port),
 		ServiceHost : host,
 		ServicePort : port,
 	}
+	go func() {
+		l.UpdateTtl()
+		time.Sleep(time.Second * 2)
+	}()
 	return l
 }
 
@@ -118,7 +118,7 @@ func (sev *Leader) Select(onLeader func(*ServiceMember)) {
 		Port: sev.ServicePort,
 	}
 	go func() {
-		success, err := sev.consulLock.Lock(sev.lockKey, 10)
+		success, err := sev.lock.Lock()
 		if err == nil {
 			sev.leader = success
 			leader.IsLeader = success
@@ -126,7 +126,7 @@ func (sev *Leader) Select(onLeader func(*ServiceMember)) {
 			sev.Register()
 		}
 		for {
-			success, err := sev.consulLock.Lock(sev.lockKey, 10)
+			success, err := sev.lock.Lock()
 			if err == nil {
 				if success != sev.leader {
 					sev.leader = success
@@ -135,7 +135,7 @@ func (sev *Leader) Select(onLeader func(*ServiceMember)) {
 					sev.Register()
 				}
 			}
-			sev.session.Renew(sev.sessionId)
+			sev.session.Renew()
 			sev.UpdateTtl()
 			time.Sleep(time.Second * 3)
 		}
@@ -157,7 +157,7 @@ func (sev *Leader) Get() (*ServiceMember, error) {
 
 // force free a leader
 func (sev *Leader) Free() {
-	sev.consulLock.Delete(sev.lockKey)
+	sev.lock.Delete()
 	sev.Deregister()
 	sev.leader = false
 }

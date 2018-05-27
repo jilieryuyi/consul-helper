@@ -1,12 +1,15 @@
 package consul
+
+import "github.com/hashicorp/consul/api"
+
 type KvEntity struct {
 	kv IKv
 	Key string
 	Value []byte
 }
 
-func NewKvEntity(kv IKv, key string, value []byte) *KvEntity{
-	return &KvEntity{kv, key, value}
+func NewKvEntity(kv *api.KV, key string, value []byte) *KvEntity{
+	return &KvEntity{NewKv(kv), key, value}
 }
 
 func (kv *KvEntity) Set() (*KvEntity, error) {

@@ -9,8 +9,7 @@ func TestNewKvEntity(t *testing.T) {
 	config.Address = "127.0.0.1:8500"
 
 	client, _ := api.NewClient(config)
-	kv := NewKv(client.KV())
-	e := NewKvEntity(kv, "a", []byte("a"))
+	e := NewKvEntity(client.KV(), "a", []byte("a"))
 	_, err := e.Set()
 
 	if err != nil {
