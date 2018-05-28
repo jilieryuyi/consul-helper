@@ -6,10 +6,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	EventStatusChange = iota+1
+	EventDelete
+)
+
 // WatchService is the implementation of grpc.naming.Watcher
 type WatchService struct {
-	// cc: Consul Client
-	cc *consul.Client
 	// LastIndex to watch consul
 	li uint64
 	// addrs is the service address cache
@@ -18,31 +21,18 @@ type WatchService struct {
 	addrs []*consul.ServiceEntry//[]string
 	target string
 	health *consul.Health
-	// leader change callback
-	onChange []OnchangeFunc
-	serviceIp string
-	port int
 	// unlock api, come form service.go(Unlock)
 	//unlock unlockFunc
 }
 
 //type unlockFunc func() (bool, error)
 type WatchOption func(w *WatchService)
-type OnchangeFunc func()//ip string, port int, isLeader bool)
 
 // watch service change
-func NewWatchService(
-	health *consul.Health,
-	serviceName string,
-	serviceIp string,
-	port int,
-	opts ...WatchOption,
-) *WatchService {
+func NewWatchService(health *consul.Health, serviceName string, opts ...WatchOption, ) *WatchService {
 	w := &WatchService{
 		target:    serviceName,
 		health:    health,
-		serviceIp: serviceIp,
-		port:      port,
 	}
 	for _, f := range opts {
 		f(w)
@@ -50,22 +40,8 @@ func NewWatchService(
 	return  w
 }
 
-// on service change callback
-func SetServiceChange(f OnchangeFunc) WatchOption {
-	return func(w *WatchService) {
-		w.onChange = append(w.onChange, f)
-	}
-}
-
-// unlock callback
-//func unlock(f unlockFunc) WatchOption {
-//	return func(w *WatchService) {
-//		w.unlock = f
-//	}
-//}
-
 // watch service delete and change
-func (cw *WatchService) Start() {
+func (cw *WatchService) Watch(watch func(int, *ServiceMember)) {
 	// Nil cw.addrs means it is initial called
 	// If get addrs, return to balancer
 	// If no addrs, need to watch consul
@@ -102,8 +78,8 @@ func (cw *WatchService) Start() {
 				log.Warnf("watch services return nil")
 				addrs = make([]*consul.ServiceEntry, 0)
 			}
-			cw.dialDelete(addrs)
-			cw.dialChange(addrs)
+			cw.dialDelete(watch, addrs)
+			cw.dialChange(watch, addrs)
 
 			cw.addrs = addrs
 			cw.li = li
@@ -111,94 +87,46 @@ func (cw *WatchService) Start() {
 	}
 }
 
-func (cw *WatchService) dialChange(addrs []*consul.ServiceEntry) {
+func (cw *WatchService) dialChange(watch func(int, *ServiceMember), addrs []*consul.ServiceEntry) {
 	changed := getChange(cw.addrs, addrs)
 	for _, u := range changed {
-		for {
-			log.Debugf("====>status change service: %+v,, %+v", *u.Service, u.Checks)
-			//u.Checks.AggregatedStatus()
-			// error data
-			if len(u.Service.Tags) <= 0 {
-				//log.Errorf("tag is error")
-				break
-			}
-			// if not leader
-			// 发生改变的不是leader，无须理会，只有leader发生改变才需要执行重选leader
-			if u.Service.Tags[0] != "isleader:true" {
-				//log.Errorf("is not leader")
-				break
-			}
-			// if leader runs ok
-			// 如果是leader，并且leader正常运行，也无需例会
-			if u.Service.Tags[0] == "isleader:true" && u.Checks.AggregatedStatus() == "passing" {
-				//log.Errorf("leader is running")
-				break
-			}
-			// check is self
-			// 如果是当前节点，也无需处理
-			if u.Service.Address == cw.serviceIp && u.Service.Port == cw.port {
-				//log.Warnf("is current node")
-				break
-			}
-			log.Debugf("============>leader status changed, fired cw.onChange<====")
-			// try to unlock
-			//for i := 0; i < 3; i++ {
-			//	s, err := cw.unlock()
-			//	if s {
-			//		break
-			//	}
-			//	if err != nil {
-			//		log.Errorf("unlock error: %+v", err)
-			//	}
-			//}
-			for _, f := range cw.onChange {
-				f()
-			}
-			break
+		status := statusOffline
+		if u.Checks.AggregatedStatus()  == "passing" {
+			status = statusOnline
 		}
+		leader := false
+		if len(u.Service.Tags) > 0 && u.Service.Tags[0] == "isleader:true" {
+			leader = true
+		}
+		watch(EventStatusChange, &ServiceMember{
+			IsLeader:  leader,
+			ServiceID: u.Service.ID,
+			Status:    status,
+			ServiceIp: u.Service.Address,
+			Port:      u.Service.Port,
+		})
 	}
 }
 
-func (cw *WatchService) dialDelete(addrs []*consul.ServiceEntry) {
+func (cw *WatchService) dialDelete(watch func(int, *ServiceMember), addrs []*consul.ServiceEntry) {
 	deleted := getDelete(cw.addrs, addrs)
 	//如果发生改变的服务里面有leader，并且不是自己，则执行重新选leader
 	for _, u := range deleted {
-		for {
-			log.Debugf("====>delete service: %+v", *u.Service)
-			//u.Checks.AggregatedStatus()
-			// error data
-			if len(u.Service.Tags) <= 0 {
-				log.Errorf("tag is error")
-				break
-			}
-			// if not leader
-			// 发生改变的不是leader，无须理会，只有leader发生改变才需要执行重选leader
-			if u.Service.Tags[0] != "isleader:true" {
-				//log.Errorf("is not leader")
-				break
-			}
-			// check is self
-			// 如果是当前节点，也无需处理
-			if u.Service.Address == cw.serviceIp && u.Service.Port == cw.port {
-				//log.Warnf("is current node")
-				break
-			}
-			// try to unlock
-			//for i := 0; i < 3; i++ {
-			//	s, err := cw.unlock()
-			//	if s {
-			//		break
-			//	}
-			//	if err != nil {
-			//		log.Errorf("unlock error: %+v", err)
-			//	}
-			//}
-			log.Debugf("============>leader is deleted,fired cw.onChange<====")
-			for _, f := range cw.onChange {
-				f()
-			}
-			break
+		status := statusOffline
+		if u.Checks.AggregatedStatus()  == "passing" {
+			status = statusOnline
 		}
+		leader := false
+		if len(u.Service.Tags) > 0 && u.Service.Tags[0] == "isleader:true" {
+			leader = true
+		}
+		watch(EventDelete, &ServiceMember{
+			IsLeader:  leader,
+			ServiceID: u.Service.ID,
+			Status:    status,
+			ServiceIp: u.Service.Address,
+			Port:      u.Service.Port,
+		})
 	}
 }
 
