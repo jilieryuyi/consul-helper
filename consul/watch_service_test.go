@@ -4,7 +4,6 @@ import (
 	"testing"
 	"github.com/hashicorp/consul/api"
 	"github.com/sirupsen/logrus"
-	"sync"
 	"time"
 )
 
@@ -13,12 +12,12 @@ func TestNewWatchService(t *testing.T) {
 	config.Address = "127.0.0.1:8500"
 
 	client, _ := api.NewClient(config)
-	serviceName := "service-test"
-	wg := new(sync.WaitGroup)
-	wg.Add(3)
+	serviceName := "service-test2"
+	//wg := new(sync.WaitGroup)
+	//wg.Add(3)
 	watch := NewWatchService(client.Health(), serviceName)
 	watch.Watch(func(event int, member *ServiceMember) {
-		wg.Done()
+		//wg.Done()
 		switch event {
 		case EventAdd:
 			logrus.Infof("add service: %+v", member)
@@ -38,5 +37,7 @@ func TestNewWatchService(t *testing.T) {
 	time.Sleep(time.Second)
 	// event delete
 	sev.Deregister()
-	wg.Wait()
+	//wg.Wait()
+
+	time.Sleep(time.Second * 3)
 }
