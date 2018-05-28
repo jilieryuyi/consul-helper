@@ -10,52 +10,56 @@ import (
 	"errors"
 )
 
-type Client struct {
-	ctx            context.Context
-	buffer         []byte
-	conn           *net.TCPConn
-	connLock       *sync.Mutex
-	statusLock     *sync.Mutex
-	status         int
-	getLeader      GetLeaderFunc
-	onEvents       []OnClientEventFunc
-	asyncWriteChan chan []byte
-	checkChan      chan address
-}
-type address struct {
-	ip string
-	port int
-}
-type GetLeaderFunc     func()(string, int, error)
-type ClientOption      func(tcp *Client)
-type OnClientEventFunc func(tcp *Client, event int, content []byte)
-
 const asyncWriteChanLen = 10000
-var notConnect          = errors.New("not connect")
+var NotConnect          = errors.New("not connect")
+const (
+	statusConnect = 1 << iota
+)
 
-func SetGetLeader(f GetLeaderFunc) ClientOption {
+type Client struct {
+	ctx               context.Context
+	buffer            []byte
+	conn              *net.TCPConn
+	connLock          *sync.Mutex
+	statusLock        *sync.Mutex
+	status            int
+	onMessageCallback []OnClientEventFunc
+	asyncWriteChan    chan []byte
+	ip                string
+	port              int
+	coder             ICoder
+}
+
+type ClientOption      func(tcp *Client)
+type OnClientEventFunc func(tcp *Client, content []byte)
+
+// 设置收到消息的回调函数
+func SetOnMessage(f ...OnClientEventFunc) ClientOption {
 	return func(tcp *Client) {
-		tcp.getLeader = f
+		tcp.onMessageCallback = append(tcp.onMessageCallback, f...)
 	}
 }
 
-func SetOnClientEvent(f ...OnClientEventFunc) ClientOption {
+// 用来设置编码解码的接口
+func SetCoder(coder ICoder) ClientOption {
 	return func(tcp *Client) {
-		tcp.onEvents = append(tcp.onEvents, f...)
+		tcp.coder = coder
 	}
 }
 
-func NewClient(ctx context.Context, opts ...ClientOption) *Client {
+func NewClient(ctx context.Context, ip string, port int, opts ...ClientOption) *Client {
 	c := &Client{
-		ctx:           ctx,
-		buffer:        make([]byte, 0),
-		conn:          nil,
-		statusLock:    new(sync.Mutex),
-		status:        0,
-		onEvents:      make([]OnClientEventFunc, 0),
-		asyncWriteChan:make(chan []byte, asyncWriteChanLen),
-		connLock:      new(sync.Mutex),
-		checkChan:     make(chan address),
+		buffer:            make([]byte, 0),
+		conn:              nil,
+		statusLock:        new(sync.Mutex),
+		status:            0,
+		onMessageCallback: make([]OnClientEventFunc, 0),
+		asyncWriteChan:    make(chan []byte, asyncWriteChanLen),
+		connLock:          new(sync.Mutex),
+		ip:                ip,
+		port:              port,
+		ctx:               ctx,
+		coder:             &Coder{},
 	}
 	for _, f := range opts {
 		f(c)
@@ -64,83 +68,41 @@ func NewClient(ctx context.Context, opts ...ClientOption) *Client {
 	return c
 }
 
+func (tcp *Client) SetIp(ip string) {
+	tcp.ip = ip
+}
+
+func (tcp *Client) SetPort(port int) {
+	tcp.port = port
+}
+
 func (tcp *Client) AsyncWrite(data []byte) {
 	tcp.asyncWriteChan <- data
 }
 
 func (tcp *Client) Write(data []byte) (int, error) {
-	if tcp.status & agentStatusConnect <= 0 {
-		return 0, notConnect
+	if tcp.status & statusConnect <= 0 {
+		return 0, NotConnect
 	}
 	return tcp.conn.Write(data)
 }
 
-func (tcp *Client) connect(ip string, port int) {
-	if ip == "" || port <= 0 {
-		return
-	}
-	tcp.disconnect()
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", ip, port))
-	if err != nil {
-		log.Errorf("start agent with error: %+v", err)
-		return
-	}
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	if err != nil {
-		log.Errorf("start agent with error: %+v", err)
-		return
-	}
-	if tcp.status & agentStatusConnect <= 0 {
-		tcp.status |= agentStatusConnect
-	}
-	tcp.conn = conn
-}
-
 func (tcp *Client) keep() {
-	data         := Pack(CMD_TICK, []byte(""))
-	var c         = make(chan struct{})
-	var serviceIp = ""
-	var port      = 0
-
+	data  := tcp.coder.Encode([]byte(""))
+	c     := make(chan struct{})
 	go func() {
 		for {
 			c <- struct{}{}
 			time.Sleep(time.Second * 3)
 		}
 	}()
-
 	for {
 		select {
-		case ad, ok := <- tcp.checkChan:
-			if !ok {
-				return
-			}
-			if serviceIp != "" && port > 0 {
-				if serviceIp != ad.ip || port != ad.port {
-					log.Warnf("leader change found")
-					//如果服务地址端口发生改变
-					tcp.disconnect()
-					serviceIp = ad.ip
-					port = ad.port
-				}
-			} else {
-				serviceIp = ad.ip
-				port = ad.port
-				tcp.run()
-			}
 		case <- c :
-			s, p, _ := tcp.getLeader()
-			if serviceIp != "" && port > 0 {
-				if serviceIp != s || port != p {
-					log.Warnf("self check, leader change found")
-					//如果服务地址端口发生改变
-					tcp.disconnect()
-					serviceIp = s//ad.ip
-					port = p//ad.port
-				}
-			}
+			// keepalive
 			tcp.Write(data)
 		case sendData, ok := <- tcp.asyncWriteChan:
+			//async send support
 			if !ok {
 				return
 			}
@@ -150,111 +112,108 @@ func (tcp *Client) keep() {
 			}
 			if n < len(sendData) {
 				log.Errorf("send not complete")
-
 			}
 		}
 	}
 }
 
-func (tcp *Client) Start(serviceIp string, port int)  {
-	tcp.checkChan <- address{serviceIp, port}
-}
-
-func (tcp *Client) run() {
-	if tcp.status & agentStatusConnect > 0 {
+// use like go tcp.Connect()
+func (tcp *Client) Connect() {
+	// 如果已经连接，直接返回
+	if tcp.status & statusConnect > 0 {
 		return
 	}
-	go func() {
+	for {
+		select {
+			case <-tcp.ctx.Done():
+				return
+			default:
+		}
+		// 断开已有的连接
+		tcp.Disconnect()
+		// 尝试连接
 		for {
+			tcpAddr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", tcp.ip, tcp.port))
+			if err != nil {
+				log.Errorf("start agent with error: %+v", err)
+				break
+			}
+			conn, err := net.DialTCP("tcp", nil, tcpAddr)
+			if err != nil {
+				log.Errorf("start agent with error: %+v", err)
+				break
+			}
+			if tcp.status & statusConnect <= 0 {
+				tcp.status |= statusConnect
+			}
+			tcp.conn = conn
+			break
+		}
+		// 判断连接是否成功
+		if tcp.status & statusConnect <= 0 {
+			log.Warnf("can not connect to %v:%v, wait a second, will try again", tcp.ip, tcp.port)
+			time.Sleep(time.Second)
+			continue
+		}
+		log.Debugf("====================client connect to %v:%v ok====================", tcp.ip, tcp.port)
+		for {
+			if tcp.status & statusConnect <= 0  {
+				break
+			}
+			readBuffer := make([]byte, 4096)
+			size, err  := tcp.conn.Read(readBuffer)
+			if err != nil || size <= 0 {
+				log.Warnf("client read with error: %+v", err)
+				tcp.Disconnect()
+				break
+			}
+			tcp.onMessage(readBuffer[:size])
 			select {
-				case <-tcp.ctx.Done():
-					return
-				default:
-			}
-			serviceIp, port, _ := tcp.getLeader()
-			tcp.connect(serviceIp, port)
-			if tcp.status & agentStatusConnect <= 0 {
-				time.Sleep(time.Second * 3)
-				for {
-					serviceIp, port, _ = tcp.getLeader()
-					if serviceIp == "" || port <= 0 {
-						log.Warnf("ip or port empty: %v, %v, wait for init", serviceIp, port)
-						time.Sleep(time.Second * 1)
-						continue
-					}
-					break
-				}
-				continue
-			}
-			log.Debugf("====================agent client connect to leader %s:%d====================", serviceIp, port)
-			for {
-				if tcp.status & agentStatusConnect <= 0  {
-					break
-				}
-				readBuffer := make([]byte, 4096)
-				size, err  := tcp.conn.Read(readBuffer)
-
-				if err != nil || size <= 0 {
-					log.Warnf("agent read with error: %+v", err)
-					tcp.disconnect()
-					break
-				}
-				tcp.onMessage(readBuffer[:size])
-				select {
-				case <-tcp.ctx.Done():
-					return
-				default:
-				}
+			case <-tcp.ctx.Done():
+				return
+			default:
 			}
 		}
-	}()
+	}
 }
 
 func (tcp *Client) onMessage(msg []byte) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("Unpack recover##########%+v, %+v", err, tcp.buffer)
+			log.Errorf("onMessage recover%+v, %+v", err, tcp.buffer)
 			tcp.buffer = make([]byte, 0)
 		}
 	}()
 	tcp.buffer = append(tcp.buffer, msg...)
 	for {
 		olen := len(tcp.buffer)
-		cmd, content, pos, err := Unpack(tcp.buffer)
+		content, pos, err := tcp.coder.Decode(tcp.buffer)
 		if err != nil {
 			log.Errorf("%v", err)
 			tcp.buffer = make([]byte, 0)
-			return
-		}
-		if cmd <= 0 {
 			return
 		}
 		if len(tcp.buffer) >= pos {
 			tcp.buffer = append(tcp.buffer[:0], tcp.buffer[pos:]...)
 		} else {
 			tcp.buffer = make([]byte, 0)
-			log.Errorf("pos %v (olen=%v) error, cmd=%v, content=%v(%v) len is %v, data is: %+v", pos, olen, cmd, content, string(content), len(tcp.buffer), tcp.buffer)
+			log.Errorf("pos %v (olen=%v) error, content=%v(%v) len is %v, data is: %+v", pos, olen, content, string(content), len(tcp.buffer), tcp.buffer)
 		}
-		if !hasCmd(cmd) {
-			log.Errorf("cmd %d dos not exists", cmd)
-			tcp.buffer = make([]byte, 0)
-			return
-		}
-		for _, f := range tcp.onEvents {
-			f(tcp, cmd, content)
+		for _, f := range tcp.onMessageCallback {
+			f(tcp, content)
 		}
 	}
 }
 
-func (tcp *Client) disconnect() {
-	if tcp.status & agentStatusConnect <= 0 {
-		log.Debugf("agent is in disconnect status")
+func (tcp *Client) Disconnect() {
+	if tcp.status & statusConnect <= 0 {
+		log.Debugf("client is in disconnect status")
 		return
 	}
-	log.Warnf("====================agent disconnect====================")
+	log.Warnf("====================client disconnect====================")
 	tcp.conn.Close()
-	if tcp.status & agentStatusConnect > 0 {
-		tcp.status ^= agentStatusConnect
+	if tcp.status & statusConnect > 0 {
+		tcp.status ^= statusConnect
 	}
 }
 

@@ -19,15 +19,10 @@ const (
 	tcpDefaultReadBufferSize      = 1024
 )
 
-const (
-	serviceEnable = 1 << iota
-	agentStatusOnline
-	agentStatusConnect
-)
+
 const (
 	tcpNodeOnline = 1 << iota
 )
-const MAX_PACKAGE_LEN = 10240
 
 
 type NodeFunc   func(n *TcpClientNode)
