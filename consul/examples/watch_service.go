@@ -29,6 +29,8 @@ func main() {
 		}
 	})
 
+	time.Sleep(time.Second * 3)
+
 	sev := consul.NewService(client.Agent(), serviceName, "127.0.0.1", 7770)
 	logrus.Infof("%v register", time.Now().Unix())
 	sev.Register()

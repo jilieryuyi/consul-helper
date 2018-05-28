@@ -52,7 +52,7 @@ func (cw *WatchService) Watch(watch func(int, *ServiceMember)) {
 			// must return addrs to balancer, use ticker to query consul till data gotten
 			log.Infof("query consul service")
 			addrs, li, err := cw.queryConsul(nil)
-			log.Infof("service: %+v", addrs)
+			log.Infof("service: %v, %+v", li,addrs)
 			// got addrs, return
 			if err == nil {
 				cw.addrs = addrs
@@ -61,17 +61,22 @@ func (cw *WatchService) Watch(watch func(int, *ServiceMember)) {
 				for _, a := range addrs {
 					log.Infof("addr: %+v", *a)
 				}
+			} else {
+				time.Sleep(time.Second)
 			}
 			continue
 		}
 		for {
 			// watch consul
 			addrs, li, err := cw.queryConsul(&consul.QueryOptions{WaitIndex: cw.li})
+			log.Infof("watch return %v services", len(addrs))
 			if err != nil {
 				log.Errorf("============>cw.queryConsul error: %+v", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
+
+
 
 			// 这里意欲监听leader的变化
 			// 比如删除了leader，需要触发重选leader
@@ -79,7 +84,12 @@ func (cw *WatchService) Watch(watch func(int, *ServiceMember)) {
 			if addrs == nil {
 				log.Warnf("watch services return nil")
 				addrs = make([]*consul.ServiceEntry, 0)
+			} else {
+				for _, a := range addrs {
+					log.Infof("watch addr: %+v\r\n%+v", *a, *a.Service)
+				}
 			}
+			cw.dialAdd(watch, addrs)
 			cw.dialDelete(watch, addrs)
 			cw.dialChange(watch, addrs)
 
