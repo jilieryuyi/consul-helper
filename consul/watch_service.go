@@ -9,6 +9,7 @@ import (
 const (
 	EventStatusChange = iota+1
 	EventDelete
+	EventAdd
 )
 
 // WatchService is the implementation of grpc.naming.Watcher
@@ -99,6 +100,28 @@ func (cw *WatchService) dialChange(watch func(int, *ServiceMember), addrs []*con
 			leader = true
 		}
 		watch(EventStatusChange, &ServiceMember{
+			IsLeader:  leader,
+			ServiceID: u.Service.ID,
+			Status:    status,
+			ServiceIp: u.Service.Address,
+			Port:      u.Service.Port,
+		})
+	}
+}
+
+func (cw *WatchService) dialAdd(watch func(int, *ServiceMember), addrs []*consul.ServiceEntry) {
+	deleted := getDelete(addrs, cw.addrs)
+	//如果发生改变的服务里面有leader，并且不是自己，则执行重新选leader
+	for _, u := range deleted {
+		status := statusOffline
+		if u.Checks.AggregatedStatus()  == "passing" {
+			status = statusOnline
+		}
+		leader := false
+		if len(u.Service.Tags) > 0 && u.Service.Tags[0] == "isleader:true" {
+			leader = true
+		}
+		watch(EventAdd, &ServiceMember{
 			IsLeader:  leader,
 			ServiceID: u.Service.ID,
 			Status:    status,

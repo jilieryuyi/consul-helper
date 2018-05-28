@@ -3,7 +3,7 @@ package consul
 import (
 	"github.com/hashicorp/consul/api"
 	log "github.com/sirupsen/logrus"
-	"github.com/pkg/errors"
+	"errors"
 )
 
 var KvDoesNotExists = errors.New("kv does not exists")
