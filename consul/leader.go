@@ -127,6 +127,7 @@ func (sev *Leader) Select(onLeader func(*ServiceMember)) {
 		success, err := sev.lock.Lock()
 		if err == nil {
 			sev.leader = success
+			sev.service.SetLeader(success)
 			leader.IsLeader = success
 			go onLeader(leader)
 			sev.Register()
@@ -136,6 +137,7 @@ func (sev *Leader) Select(onLeader func(*ServiceMember)) {
 			if err == nil {
 				if success != sev.leader {
 					sev.leader = success
+					sev.service.SetLeader(success)
 					leader.IsLeader = success
 					go onLeader(leader)
 					sev.Register()

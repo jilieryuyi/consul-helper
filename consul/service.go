@@ -44,6 +44,7 @@ type IService interface {
 	Deregister() error
 	Register() error
 	UpdateTtl() error
+	SetLeader(bool)
 }
 
 type ServiceOption func(s *Service)
@@ -77,6 +78,10 @@ func NewService(
 		opt(sev)
 	}
 	return sev
+}
+
+func (sev *Service) SetLeader(leader bool) {
+	sev.leader = leader
 }
 
 func (sev *Service) Deregister() error {

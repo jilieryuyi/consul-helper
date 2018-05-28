@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -26,6 +27,15 @@ func main() {
 	leader2.Select(func(member *consul.ServiceMember) {
 		logrus.Infof("2=>%+v", member)
 	})
+
+	go func() {
+		for {
+			l, e := leader1.Get()
+			logrus.Infof("%v, %v", l, e)
+			time.Sleep(time.Second)
+		}
+	}()
+
 	//defer leader2.Free()
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,
