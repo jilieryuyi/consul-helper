@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"bytes"
+	"time"
 )
 func TestNewWatchKv(t *testing.T) {
 	config := api.DefaultConfig()
@@ -26,4 +27,10 @@ func TestNewWatchKv(t *testing.T) {
 	kv := NewKvEntity(client.KV(), "test/a", value)
 	kv.Set()
 	wg.Wait()
+
+	a := time.After(time.Second)
+	select {
+	case <- a:
+		kv.Delete()
+	}
 }
