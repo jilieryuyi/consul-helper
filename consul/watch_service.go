@@ -6,12 +6,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//监听服务变化
-//如果leader服务变为不可用状态
-//则重新选举leader
-
-// ConsulWatcher is the implementation of grpc.naming.Watcher
-type ConsulWatcher struct {
+// WatchService is the implementation of grpc.naming.Watcher
+type WatchService struct {
 	// cc: Consul Client
 	cc *consul.Client
 	// LastIndex to watch consul
@@ -31,24 +27,22 @@ type ConsulWatcher struct {
 }
 
 //type unlockFunc func() (bool, error)
-type WatchOption func(w *ConsulWatcher)
+type WatchOption func(w *WatchService)
 type OnchangeFunc func()//ip string, port int, isLeader bool)
 
 // watch service change
-func NewWatch(
-	cc *consul.Client,
+func NewWatchService(
+	health *consul.Health,
 	serviceName string,
 	serviceIp string,
 	port int,
 	opts ...WatchOption,
-) *ConsulWatcher {
-	health := cc.Health()//*consul.Health,
-	w := &ConsulWatcher{
-		cc: cc,
-		target: serviceName,
-		health:health,
-		serviceIp:serviceIp,
-		port:port,
+) *WatchService {
+	w := &WatchService{
+		target:    serviceName,
+		health:    health,
+		serviceIp: serviceIp,
+		port:      port,
 	}
 	for _, f := range opts {
 		f(w)
@@ -58,20 +52,20 @@ func NewWatch(
 
 // on service change callback
 func SetServiceChange(f OnchangeFunc) WatchOption {
-	return func(w *ConsulWatcher) {
+	return func(w *WatchService) {
 		w.onChange = append(w.onChange, f)
 	}
 }
 
 // unlock callback
 //func unlock(f unlockFunc) WatchOption {
-//	return func(w *ConsulWatcher) {
+//	return func(w *WatchService) {
 //		w.unlock = f
 //	}
 //}
 
 // watch service delete and change
-func (cw *ConsulWatcher) Start() {
+func (cw *WatchService) Start() {
 	// Nil cw.addrs means it is initial called
 	// If get addrs, return to balancer
 	// If no addrs, need to watch consul
@@ -117,7 +111,7 @@ func (cw *ConsulWatcher) Start() {
 	}
 }
 
-func (cw *ConsulWatcher) dialChange(addrs []*consul.ServiceEntry) {
+func (cw *WatchService) dialChange(addrs []*consul.ServiceEntry) {
 	changed := getChange(cw.addrs, addrs)
 	for _, u := range changed {
 		for {
@@ -165,7 +159,7 @@ func (cw *ConsulWatcher) dialChange(addrs []*consul.ServiceEntry) {
 	}
 }
 
-func (cw *ConsulWatcher) dialDelete(addrs []*consul.ServiceEntry) {
+func (cw *WatchService) dialDelete(addrs []*consul.ServiceEntry) {
 	deleted := getDelete(cw.addrs, addrs)
 	//如果发生改变的服务里面有leader，并且不是自己，则执行重新选leader
 	for _, u := range deleted {
@@ -209,7 +203,7 @@ func (cw *ConsulWatcher) dialDelete(addrs []*consul.ServiceEntry) {
 }
 
 // queryConsul is helper function to query consul
-func (cw *ConsulWatcher) queryConsul(q *consul.QueryOptions) ([]*consul.ServiceEntry, uint64, error) {
+func (cw *WatchService) queryConsul(q *consul.QueryOptions) ([]*consul.ServiceEntry, uint64, error) {
 	// query consul
 	cs, meta, err := cw.health.Service(cw.target, "", false, q)
 	if err != nil {
