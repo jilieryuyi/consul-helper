@@ -4,61 +4,31 @@ import (
 	"github.com/hashicorp/consul/api"
 	log "github.com/sirupsen/logrus"
 	"time"
-	"encoding/json"
 )
 
-type ICoder interface {
-	Encode(data interface{}) ([]byte, error)
-	Decode(data []byte) (interface{}, error)
-}
 
 type WatchKv struct {
-	coder ICoder
 	kv *api.KV
 	prefix string
 	notify []Notify
 }
 
 type Notify func(kv *api.KV, key string, data interface{})
-type DefaultCoder struct {}
-
-func (d *DefaultCoder) Encode(data interface{}) ([]byte, error) {
-	return json.Marshal(data)
-}
-
-func (d *DefaultCoder) Decode(data []byte) (interface{}, error) {
-	var res interface{}
-	err := json.Unmarshal(data, &res)
-	return res, err
-}
-
 type WatchKvOption func(k *WatchKv)
-func SetCoder(coder ICoder) WatchKvOption {
-	return func(k *WatchKv) {
-		k.coder = coder
-	}
+type IWatchKv interface {
+	Watch(watch func([]byte))
 }
 
-func SetNotify(n Notify) WatchKvOption {
-	return func(k *WatchKv) {
-		k.notify = append(k.notify, n)
-	}
-}
-
-func NewConsulWatchKv(kv *api.KV, prefix string, options ...WatchKvOption) *WatchKv {
+func NewWatchKv(kv *api.KV, prefix string) IWatchKv {
 	k := &WatchKv{
 		prefix:prefix,
 		kv:kv,
 		notify:make([]Notify, 0),
 	}
-	k.coder = &DefaultCoder{}
-	for _, f := range options {
-		f(k)
-	}
 	return k
 }
 
-func (m *WatchKv) Watch() {
+func (m *WatchKv) Watch(watch func([]byte)) {
 	go func() {
 		lastIndex := uint64(0)
 		for {
@@ -84,18 +54,8 @@ func (m *WatchKv) Watch() {
 				if len(v.Value) == 0 {
 					continue
 				}
-				d, e := m.coder.Decode(v.Value)
-				if e != nil {
-					log.Errorf("%+v", v.Value)
-					log.Errorf("%+v", string(v.Value))
-					log.Errorf("%+v", e)
-					continue
-				}
-				for _, n := range m.notify  {
-					n(m.kv, v.Key, d)
-				}
+				watch(v.Value)
 			}
-			time.Sleep(time.Second)
 		}
 	}()
 }
