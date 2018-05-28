@@ -12,20 +12,31 @@ func TestNewService(t *testing.T) {
 	client, _ := api.NewClient(config)
 	agent := client.Agent()
 
-	NewService(
-		agent,
-		"test",
-		"127.0.0.1",
-		7000)
-	NewService(
-		agent,
-		"test",
-		"127.0.0.1",
-		7001)
-	 NewService(
-		agent,
-		 "test",
-		"127.0.0.1",
-		7002,
-		)
+	sev1 := NewService(agent, "test", "127.0.0.1", 7000)
+	err := sev1.Register()
+	if err != nil {
+		t.Errorf("register error")
+	}
+	err = sev1.Deregister()
+	if err != nil {
+		t.Errorf("Deregister error")
+	}
+	sev1 = NewService(agent, "test", "127.0.0.1", 7001)
+	err = sev1.Register()
+	if err != nil {
+		t.Errorf("register error")
+	}
+	err = sev1.Deregister()
+	if err != nil {
+		t.Errorf("Deregister error")
+	}
+	sev1 = NewService(agent, "test", "127.0.0.1", 7002, )
+	err = sev1.Register()
+	if err != nil {
+		t.Errorf("register error")
+	}
+	err = sev1.Deregister()
+	if err != nil {
+		t.Errorf("Deregister error")
+	}
 }

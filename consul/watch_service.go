@@ -46,19 +46,20 @@ func (cw *WatchService) Watch(watch func(int, *ServiceMember)) {
 	// Nil cw.addrs means it is initial called
 	// If get addrs, return to balancer
 	// If no addrs, need to watch consul
+	go func() {
 	for {
 		if cw.addrs == nil {
 			// must return addrs to balancer, use ticker to query consul till data gotten
-			log.Debugf("query consul service")
+			log.Infof("query consul service")
 			addrs, li, _ := cw.queryConsul(nil)
-			log.Debugf("service: %+v", addrs)
+			log.Infof("service: %+v", addrs)
 			// got addrs, return
 			if len(addrs) > 0 {
 				cw.addrs = addrs
 				cw.li    = li
 				//当前自己的服务已经注册成功
 				for _, a := range addrs {
-					log.Debugf("addr: %+v", *a)
+					log.Infof("addr: %+v", *a)
 				}
 			}
 			continue
@@ -86,6 +87,7 @@ func (cw *WatchService) Watch(watch func(int, *ServiceMember)) {
 			cw.li = li
 		}
 	}
+	}()
 }
 
 func (cw *WatchService) dialChange(watch func(int, *ServiceMember), addrs []*consul.ServiceEntry) {
