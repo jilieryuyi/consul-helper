@@ -51,10 +51,10 @@ func (cw *WatchService) Watch(watch func(int, *ServiceMember)) {
 		if cw.addrs == nil {
 			// must return addrs to balancer, use ticker to query consul till data gotten
 			log.Infof("query consul service")
-			addrs, li, _ := cw.queryConsul(nil)
+			addrs, li, err := cw.queryConsul(nil)
 			log.Infof("service: %+v", addrs)
 			// got addrs, return
-			if len(addrs) > 0 {
+			if err == nil {
 				cw.addrs = addrs
 				cw.li    = li
 				//当前自己的服务已经注册成功
