@@ -1,4 +1,5 @@
 package consul
+
 import (
 	log "github.com/sirupsen/logrus"
 	"github.com/hashicorp/consul/api"
@@ -65,10 +66,12 @@ func NewLeader(
 	return l
 }
 
+//deregister service
 func (sev *Leader) Deregister() error {
 	return sev.service.Deregister()
 }
 
+//register service
 func (sev *Leader) Register() (*ServiceMember, error) {
 	err := sev.service.Register()
 	leader := &ServiceMember{
@@ -81,10 +84,12 @@ func (sev *Leader) Register() (*ServiceMember, error) {
 	return leader, err
 }
 
+// update service's ttl
 func (sev *Leader) UpdateTtl() error {
 	return sev.service.UpdateTtl()
 }
 
+// get all service by current service name
 func (sev *Leader) GetServices(passingOnly bool) ([]*ServiceMember, error) {
 	members, _, err := sev.health.Service(sev.ServiceName, "", passingOnly, nil)
 	if err != nil {
@@ -109,15 +114,16 @@ func (sev *Leader) GetServices(passingOnly bool) ([]*ServiceMember, error) {
 	return data, nil
 }
 
+// select a leader
 func (sev *Leader) Select(onLeader func(*ServiceMember)) {
-	leader := &ServiceMember{
-		IsLeader: false,
-		ServiceID: sev.ServiceID,
-		Status: statusOnline,
-		ServiceIp: sev.ServiceHost,
-		Port: sev.ServicePort,
-	}
 	go func() {
+		leader := &ServiceMember{
+			IsLeader: false,
+			ServiceID: sev.ServiceID,
+			Status: statusOnline,
+			ServiceIp: sev.ServiceHost,
+			Port: sev.ServicePort,
+		}
 		success, err := sev.lock.Lock()
 		if err == nil {
 			sev.leader = success
@@ -142,6 +148,7 @@ func (sev *Leader) Select(onLeader func(*ServiceMember)) {
 	}()
 }
 
+// get leader service
 func (sev *Leader) Get() (*ServiceMember, error) {
 	members, _ := sev.GetServices(true)
 	if members == nil {
@@ -157,7 +164,9 @@ func (sev *Leader) Get() (*ServiceMember, error) {
 
 // force free a leader
 func (sev *Leader) Free() {
-	sev.lock.Delete()
 	sev.Deregister()
-	sev.leader = false
+	if sev.leader {
+		sev.lock.Delete()
+		sev.leader = false
+	}
 }

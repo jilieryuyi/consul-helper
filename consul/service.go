@@ -62,15 +62,6 @@ func NewService(
 	port int,
 	opts ...ServiceOption,
 ) IService {
-
-	//consulConfig        := api.DefaultConfig()
-	//consulConfig.Address = address//ctx.Config.ConsulAddress
-	//c, err         := api.NewClient(consulConfig)
-	//
-	//if err != nil {
-	//	log.Panicf("%v", err)
-	//}
-
 	sev := &Service{
 		ServiceName : name,
 		ServiceIp   : host,
@@ -80,7 +71,7 @@ func NewService(
 		leader      : false,
 		lock        : new(sync.Mutex),
 		ServiceID   : fmt.Sprintf("%s-%s-%d", name, host, port),
-		agent       : agent,//c.Agent(),
+		agent       : agent,
 	}
 	for _, opt := range opts {
 		opt(sev)
