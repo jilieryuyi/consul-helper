@@ -9,6 +9,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 func main() {
+	// 先运行server端
+	// go run server.go
+	// 在运行client端
+	// go run client
 	address := "127.0.0.1:7770"
 	client  := tcp.NewClient(context.Background())
 	err     := client.Connect(address, time.Second * 3)
