@@ -2,7 +2,6 @@ package tcp
 
 import (
 	"net"
-	"fmt"
 	log "github.com/sirupsen/logrus"
 	"time"
 	"sync"
@@ -33,8 +32,7 @@ type Client struct {
 	status            int
 	onMessageCallback []OnClientEventFunc
 	asyncWriteChan    chan []byte
-	ip                string
-	port              int
+	address                string
 	coder             ICodec
 	onConnect         OnConnectFunc
 	msgId             int64
@@ -109,7 +107,7 @@ func SetOnConnect(onCnnect OnConnectFunc) ClientOption {
 	}
 }
 
-func NewClient(ctx context.Context, ip string, port int, opts ...ClientOption) *Client {
+func NewClient(ctx context.Context, address string, opts ...ClientOption) *Client {
 	c := &Client{
 		buffer:            make([]byte, 0),
 		conn:              nil,
@@ -118,8 +116,7 @@ func NewClient(ctx context.Context, ip string, port int, opts ...ClientOption) *
 		onMessageCallback: make([]OnClientEventFunc, 0),
 		asyncWriteChan:    make(chan []byte, asyncWriteChanLen),
 		connLock:          new(sync.Mutex),
-		ip:                ip,
-		port:              port,
+		address:           address,
 		ctx:               ctx,
 		coder:             &Codec{},
 		bufferSize:        4096,
@@ -136,12 +133,8 @@ func NewClient(ctx context.Context, ip string, port int, opts ...ClientOption) *
 	return c
 }
 
-func (tcp *Client) SetIp(ip string) {
-	tcp.ip = ip
-}
-
-func (tcp *Client) SetPort(port int) {
-	tcp.port = port
+func (tcp *Client) SetAddress(address string) {
+	tcp.address = address
 }
 
 func (tcp *Client) AsyncWrite(data []byte) {
@@ -240,7 +233,7 @@ func (tcp *Client) Connect() {
 		tcp.Disconnect()
 		// 尝试连接
 		for {
-			tcpAddr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", tcp.ip, tcp.port))
+			tcpAddr, err := net.ResolveTCPAddr("tcp4", tcp.address)
 			if err != nil {
 				log.Errorf("start agent with error: %+v", err)
 				break
@@ -258,7 +251,7 @@ func (tcp *Client) Connect() {
 		}
 		// 判断连接是否成功
 		if tcp.status & statusConnect <= 0 {
-			log.Warnf("can not connect to %v:%v, wait a second, will try again", tcp.ip, tcp.port)
+			log.Warnf("can not connect to %v, wait a second, will try again", tcp.address)
 			time.Sleep(time.Second)
 			continue
 		}
@@ -267,7 +260,7 @@ func (tcp *Client) Connect() {
 			tcp.onConnect(tcp)
 		}
 
-		log.Infof("====================client connect to %v:%v ok====================", tcp.ip, tcp.port)
+		log.Infof("====================client connect to %v ok====================", tcp.address)
 		for {
 			if tcp.status & statusConnect <= 0  {
 				break

@@ -8,16 +8,16 @@ import (
 )
 func main() {
 	address := "127.0.0.1:7770"
-	server := tcp.NewAgentServer(context.Background(), address, tcp.SetOnServerEvents(func(node *tcp.TcpClientNode, event int, data []byte) {
-		fmt.Println("server send: ", event,  string(data))
-		sendData := tcp.Pack(event, data)
+	server := tcp.NewAgentServer(context.Background(), address, tcp.SetOnServerMessage(func(node *tcp.TcpClientNode, msgId int, data []byte) {
+		fmt.Println("server send: ", msgId,  string(data))
+		sendData := tcp.Pack(msgId, data)
 		node.Send(sendData)
 	}))
 	server.Start()
 	defer server.Close()
 
 	time.Sleep(time.Second)
-	client := tcp.NewClient(context.Background(), "127.0.0.1", 7770)
+	client := tcp.NewClient(context.Background(), address)
 	go client.Connect()
 	time.Sleep(time.Second)
 

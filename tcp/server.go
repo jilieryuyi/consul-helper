@@ -25,7 +25,7 @@ type TcpService struct {
 type OnServerEventFunc func(node *TcpClientNode, event int, data []byte)
 type AgentServerOption func(s *TcpService)
 
-func SetOnServerEvents(f ...OnServerEventFunc) AgentServerOption {
+func SetOnServerMessage(f ...OnServerEventFunc) AgentServerOption {
 	return func(s *TcpService) {
 		s.onServerEvents = append(s.onServerEvents, f...)
 	}
