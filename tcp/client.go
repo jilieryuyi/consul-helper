@@ -107,7 +107,7 @@ func (tcp *Client) Write(data []byte) (int, error) {
 }
 
 func (tcp *Client) keep() {
-	data  := tcp.coder.Encode([]byte(""))
+	data  := tcp.coder.Encode(0, []byte(""))
 	c     := make(chan struct{})
 	go func() {
 		for {
@@ -213,7 +213,7 @@ func (tcp *Client) onMessage(msg []byte) {
 	tcp.buffer = append(tcp.buffer, msg...)
 	for {
 		olen := len(tcp.buffer)
-		content, pos, err := tcp.coder.Decode(tcp.buffer)
+		_, content, pos, err := tcp.coder.Decode(tcp.buffer)
 		if err != nil {
 			log.Errorf("%v", err)
 			tcp.buffer = make([]byte, 0)

@@ -92,7 +92,7 @@ func (tcp *SyncClient) Send(data []byte) ([]byte, error) {
 		tcp.conn.SetWriteDeadline(time.Now().Add(tcp.writeTimeout))
 		defer tcp.conn.SetWriteDeadline(time.Time{})
 	}
-	sendMsg := tcp.codec.Encode(data)
+	sendMsg := tcp.codec.Encode(0, data)
 	n, err := tcp.conn.Write(sendMsg)
 	if n <= 0 || err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (tcp *SyncClient) Send(data []byte) ([]byte, error) {
 		log.Warnf("client read with error: %+v", err)
 		return nil, err
 	}
-	res, _, err :=tcp.codec.Decode(readBuffer[:size])
+	_, res, _, err :=tcp.codec.Decode(readBuffer[:size])
 	return res, err
 }
 

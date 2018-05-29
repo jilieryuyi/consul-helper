@@ -8,12 +8,12 @@ import (
 
 type codec struct {}
 
-func (c codec) Encode(msg []byte) []byte {
+func (c codec) Encode(msgId int64, msg []byte) []byte {
 	return msg
 }
 
-func (c codec) Decode(data []byte) ([]byte, int, error) {
-	return data, len(data), nil
+func (c codec) Decode(data []byte) (int64, []byte, int, error) {
+	return 0, data, len(data), nil
 }
 
 func main() {
