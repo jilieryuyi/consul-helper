@@ -26,13 +26,12 @@ type Client struct {
 	ctx               context.Context
 	buffer            []byte
 	bufferSize        int
-	conn              *net.TCPConn
+	conn              net.Conn
 	connLock          *sync.Mutex
 	statusLock        *sync.Mutex
 	status            int
 	onMessageCallback []OnClientEventFunc
 	asyncWriteChan    chan []byte
-	address                string
 	coder             ICodec
 	onConnect         OnConnectFunc
 	msgId             int64
@@ -50,7 +49,7 @@ type waiter struct {
 }
 
 type waiterData struct {
-	client *Client
+	delwaiter chan int64
 	data []byte
 	msgId int64
 }
@@ -60,7 +59,6 @@ type res struct {
 	Data []byte
 }
 
-
 func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
 	a := time.After(timeout)
 	select {
@@ -68,7 +66,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
 		if !ok {
 			return nil, ChanIsClosed
 		}
-		data.client.delwaiter <- data.msgId
+		data.delwaiter <- data.msgId
 		return data.data, nil
 	case <- a:
 		return nil, WaitTimeout
@@ -107,7 +105,7 @@ func SetOnConnect(onCnnect OnConnectFunc) ClientOption {
 	}
 }
 
-func NewClient(ctx context.Context, address string, opts ...ClientOption) *Client {
+func NewClient(ctx context.Context, opts ...ClientOption) *Client {
 	c := &Client{
 		buffer:            make([]byte, 0),
 		conn:              nil,
@@ -116,11 +114,10 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) *Clien
 		onMessageCallback: make([]OnClientEventFunc, 0),
 		asyncWriteChan:    make(chan []byte, asyncWriteChanLen),
 		connLock:          new(sync.Mutex),
-		address:           address,
 		ctx:               ctx,
 		coder:             &Codec{},
 		bufferSize:        4096,
-		msgId:             0,
+		msgId:             1,
 		waiter:            make(map[int64]*waiter),
 		addwaiter:         make(chan *waiter, 10000),
 		resChan:           make(chan *res, 10000),
@@ -130,14 +127,11 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) *Clien
 		f(c)
 	}
 	go c.keep()
+	go c.readMessage()
 	return c
 }
 
-func (tcp *Client) SetAddress(address string) {
-	tcp.address = address
-}
-
-func (tcp *Client) AsyncWrite(data []byte) {
+func (tcp *Client) AsyncSend(data []byte) {
 	tcp.asyncWriteChan <- data
 }
 
@@ -202,7 +196,7 @@ func (tcp *Client) keep() {
 			}
 			w, ok := tcp.waiter[res.MsgId]
 			if ok {
-				w.Data <- &waiterData{tcp, res.Data, res.MsgId}
+				w.Data <- &waiterData{tcp.delwaiter, res.Data, res.MsgId}
 			}
 		case msgId, ok := <- tcp.delwaiter:
 			if !ok {
@@ -217,71 +211,49 @@ func (tcp *Client) keep() {
 	}
 }
 
-// use like go tcp.Connect()
-func (tcp *Client) Connect() {
-	// 如果已经连接，直接返回
-	if tcp.status & statusConnect > 0 {
-		return
-	}
+func (tcp *Client) readMessage() {
 	for {
-		select {
-			case <-tcp.ctx.Done():
-				return
-			default:
-		}
-		// 断开已有的连接
-		tcp.Disconnect()
-		// 尝试连接
-		for {
-			tcpAddr, err := net.ResolveTCPAddr("tcp4", tcp.address)
-			if err != nil {
-				log.Errorf("start agent with error: %+v", err)
-				break
-			}
-			conn, err := net.DialTCP("tcp", nil, tcpAddr)
-			if err != nil {
-				log.Errorf("start agent with error: %+v", err)
-				break
-			}
-			if tcp.status & statusConnect <= 0 {
-				tcp.status |= statusConnect
-			}
-			tcp.conn = conn
-			break
-		}
-		// 判断连接是否成功
-		if tcp.status & statusConnect <= 0 {
-			log.Warnf("can not connect to %v, wait a second, will try again", tcp.address)
-			time.Sleep(time.Second)
+		if tcp.status & statusConnect <= 0  {
+			time.Sleep(time.Millisecond * 100)
 			continue
 		}
-
-		if tcp.onConnect != nil {
-			tcp.onConnect(tcp)
+		readBuffer := make([]byte, tcp.bufferSize)
+		size, err  := tcp.conn.Read(readBuffer)
+		if err != nil || size <= 0 {
+			log.Warnf("client read with error: %+v", err)
+			tcp.Disconnect()
+			continue
 		}
-
-		log.Infof("====================client connect to %v ok====================", tcp.address)
-		for {
-			if tcp.status & statusConnect <= 0  {
-				break
-			}
-			log.Infof("start read message %v", tcp.bufferSize)
-			readBuffer := make([]byte, tcp.bufferSize)
-			size, err  := tcp.conn.Read(readBuffer)
-			if err != nil || size <= 0 {
-				log.Warnf("client read with error: %+v", err)
-				tcp.Disconnect()
-				break
-			}
-			log.Infof("\r\n\r\n#################client receive: %v, ==%+v==", string(readBuffer[:size]), readBuffer[:size])
-			tcp.onMessage(readBuffer[:size])
-			select {
-			case <-tcp.ctx.Done():
-				return
-			default:
-			}
+		tcp.onMessage(readBuffer[:size])
+		select {
+		case <-tcp.ctx.Done():
+			return
+		default:
 		}
 	}
+}
+
+// use like go tcp.Connect()
+func (tcp *Client) Connect(address string, timeout time.Duration) error {
+	// 如果已经连接，直接返回
+	if tcp.status & statusConnect > 0 {
+		return IsConnected
+	}
+	dial := net.Dialer{Timeout: timeout}
+	conn, err := dial.Dial("tcp", address)
+	if err != nil {
+		log.Errorf("start agent with error: %+v", err)
+		return err
+	}
+	if tcp.status & statusConnect <= 0 {
+		tcp.status |= statusConnect
+	}
+	tcp.conn = conn
+	log.Infof("====================client connect to %v ok====================", address)
+	if tcp.onConnect != nil {
+		tcp.onConnect(tcp)
+	}
+	return nil
 }
 
 func (tcp *Client) onMessage(msg []byte) {
@@ -292,33 +264,23 @@ func (tcp *Client) onMessage(msg []byte) {
 		}
 	}()
 	tcp.buffer = append(tcp.buffer, msg...)
-	log.Infof("#########################buffer %+v, %+v", tcp.buffer, string(tcp.buffer))
-
 	for {
-		//time.Sleep(time.Second)
-		olen := len(tcp.buffer)
-		log.Infof("#########################buffer %+v, %+v", tcp.buffer, string(tcp.buffer))
+		bufferLen := len(tcp.buffer)
 		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
-		//log.Infof("decode= %v, %v, %v, %v", msgId, string(content), pos, err)
 		if err != nil {
 			log.Errorf("%v", err)
 			tcp.buffer = make([]byte, 0)
 			return
 		}
 		if msgId <= 0  {
-			//log.Errorf("msgId <= 0")
-			//tcp.buffer = make([]byte, 0)
 			return
 		}
 		if len(tcp.buffer) >= pos {
 			tcp.buffer = append(tcp.buffer[:0], tcp.buffer[pos:]...)
-
 		} else {
 			tcp.buffer = make([]byte, 0)
-			log.Errorf("pos %v (olen=%v) error, content=%v(%v) len is %v, data is: %+v", pos, olen, content, string(content), len(tcp.buffer), tcp.buffer)
+			log.Errorf("pos %v (olen=%v) error, content=%v(%v) len is %v, data is: %+v", pos, bufferLen, content, string(content), len(tcp.buffer), tcp.buffer)
 		}
-		log.Infof("222#########################buffer %+v, %+v", tcp.buffer, string(tcp.buffer))
-
 		tcp.resChan <- &res{MsgId:msgId, Data:content}
 		for _, f := range tcp.onMessageCallback {
 			f(tcp, content)
@@ -328,10 +290,8 @@ func (tcp *Client) onMessage(msg []byte) {
 
 func (tcp *Client) Disconnect() {
 	if tcp.status & statusConnect <= 0 {
-		log.Debugf("client is in disconnect status")
 		return
 	}
-	log.Warnf("====================client disconnect====================")
 	tcp.conn.Close()
 	if tcp.status & statusConnect > 0 {
 		tcp.status ^= statusConnect

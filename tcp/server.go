@@ -20,14 +20,15 @@ type TcpService struct {
 	buffer []byte
 	ctx context.Context
 	index int64
-	onServerEvents []OnServerEventFunc
+	onMessageCallback []OnServerEventFunc
+	codec ICodec
 }
-type OnServerEventFunc func(node *TcpClientNode, event int, data []byte)
+type OnServerEventFunc func(node *TcpClientNode, msgId int64, data []byte)
 type AgentServerOption func(s *TcpService)
 
 func SetOnServerMessage(f ...OnServerEventFunc) AgentServerOption {
 	return func(s *TcpService) {
-		s.onServerEvents = append(s.onServerEvents, f...)
+		s.onMessageCallback = append(s.onMessageCallback, f...)
 	}
 }
 
@@ -43,7 +44,8 @@ func NewAgentServer(ctx context.Context, address string, opts ...AgentServerOpti
 		status:           0,
 		buffer:           make([]byte, 0),
 		index:            0,
-		onServerEvents:   make([]OnServerEventFunc, 0),
+		onMessageCallback:   make([]OnServerEventFunc, 0),
+		codec:            &Codec{},
 	}
 	go tcp.keepalive()
 	for _, f := range opts {
@@ -75,12 +77,13 @@ func (tcp *TcpService) Start() {
 			node := newNode(
 					tcp.ctx,
 					&conn,
+					tcp.codec,
 					NodeClose(func(n *TcpClientNode) {
 						tcp.lock.Lock()
 						tcp.agents.remove(n)
 						tcp.lock.Unlock()
 					}),
-				    setOnServerEvents(tcp.onServerEvents...),
+				    setOnServerEvents(tcp.onMessageCallback...),
 				)
 			tcp.lock.Lock()
 			tcp.agents.append(node)

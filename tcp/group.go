@@ -7,9 +7,9 @@ func (c *TcpClients) append(node *TcpClientNode) {
 	*c = append(*c, node)
 }
 
-func (c *TcpClients) send(data []byte) {
+func (c *TcpClients) send(msgId int64, data []byte) {
 	for _, node := range *c {
-		node.Send(data)
+		node.Send(msgId, data)
 	}
 }
 
