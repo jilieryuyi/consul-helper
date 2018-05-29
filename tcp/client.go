@@ -168,7 +168,7 @@ func (tcp *Client) Send(data []byte) (*waiter, error) {
 }
 
 func (tcp *Client) keep() {
-	c     := make(chan struct{})
+	c := make(chan struct{})
 	go func() {
 		for {
 			c <- struct{}{}
