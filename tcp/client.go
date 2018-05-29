@@ -30,7 +30,7 @@ type Client struct {
 	asyncWriteChan    chan []byte
 	ip                string
 	port              int
-	coder             ICoder
+	coder             ICodec
 	onConnect         OnConnectFunc
 }
 
@@ -47,7 +47,7 @@ func SetOnMessage(f ...OnClientEventFunc) ClientOption {
 }
 
 // 用来设置编码解码的接口
-func SetCoder(coder ICoder) ClientOption {
+func SetCoder(coder ICodec) ClientOption {
 	return func(tcp *Client) {
 		tcp.coder = coder
 	}
@@ -77,7 +77,7 @@ func NewClient(ctx context.Context, ip string, port int, opts ...ClientOption) *
 		ip:                ip,
 		port:              port,
 		ctx:               ctx,
-		coder:             &Coder{},
+		coder:             &Codec{},
 		bufferSize:        4096,
 	}
 	for _, f := range opts {

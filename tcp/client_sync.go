@@ -21,7 +21,7 @@ type SyncClient struct {
 	asyncWriteChan    chan []byte
 	ip                string
 	port              int
-	coder             ICoder
+	codec             ICodec
 	onConnect         OnConnectFunc
 	writeTimeout      time.Duration
 	readTimeout       time.Duration
@@ -31,9 +31,9 @@ type SyncClient struct {
 type SyncClientOption      func(tcp *SyncClient)
 
 // 用来设置编码解码的接口
-func SetSyncCoder(coder ICoder) SyncClientOption {
+func SetSyncCoder(codec ICodec) SyncClientOption {
 	return func(tcp *SyncClient) {
-		tcp.coder = coder
+		tcp.codec = codec
 	}
 }
 
@@ -72,7 +72,7 @@ func NewSyncClient(ip string, port int, opts ...SyncClientOption) *SyncClient {
 		connLock:          new(sync.Mutex),
 		ip:                ip,
 		port:              port,
-		coder:             &Coder{},
+		codec:             &Codec{},
 		bufferSize:        4096,
 		writeTimeout:      time.Duration(0),
 		readTimeout:       time.Duration(0),
@@ -92,7 +92,7 @@ func (tcp *SyncClient) Send(data []byte) ([]byte, error) {
 		tcp.conn.SetWriteDeadline(time.Now().Add(tcp.writeTimeout))
 		defer tcp.conn.SetWriteDeadline(time.Time{})
 	}
-	sendMsg := tcp.coder.Encode(data)
+	sendMsg := tcp.codec.Encode(data)
 	n, err := tcp.conn.Write(sendMsg)
 	if n <= 0 || err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (tcp *SyncClient) Send(data []byte) ([]byte, error) {
 		log.Warnf("client read with error: %+v", err)
 		return nil, err
 	}
-	res, _, err :=tcp.coder.Decode(readBuffer[:size])
+	res, _, err :=tcp.codec.Decode(readBuffer[:size])
 	return res, err
 }
 

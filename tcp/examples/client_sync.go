@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-type coder struct {}
+type codec struct {}
 
-func (c coder) Encode(msg []byte) []byte {
+func (c codec) Encode(msg []byte) []byte {
 	return msg
 }
 
-func (c coder) Decode(data []byte) ([]byte, int, error) {
+func (c codec) Decode(data []byte) ([]byte, int, error) {
 	return data, len(data), nil
 }
 
@@ -24,7 +24,7 @@ func main() {
 		tcp.SetWriteTimeout(time.Second * 3),
 		tcp.SetReadTimeout(time.Second * 3),
 		tcp.SetConnectTimeout(time.Second),
-		tcp.SetSyncCoder(&coder{}),
+		tcp.SetSyncCoder(&codec{}),
 	)
 	err := client.Connect()
 	if err != nil {
