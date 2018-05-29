@@ -13,8 +13,8 @@ type ICodec interface {
 type Codec struct {}
 func (c Codec) Encode(msgId int64, msg []byte) []byte {
 	l  := len(msg)
-	r  := make([]byte, l + 6)
-	cl := l + 2
+	r  := make([]byte, l + 12)
+	cl := l + 8
 	binary.LittleEndian.PutUint32(r[:4], uint32(cl))
 	binary.LittleEndian.PutUint64(r[4:12], uint64(msgId))
 	copy(r[12:], msg)
