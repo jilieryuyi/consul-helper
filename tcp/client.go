@@ -19,6 +19,7 @@ const (
 type Client struct {
 	ctx               context.Context
 	buffer            []byte
+	bufferSize        int
 	conn              *net.TCPConn
 	connLock          *sync.Mutex
 	statusLock        *sync.Mutex
@@ -34,6 +35,7 @@ type ClientOption      func(tcp *Client)
 type OnClientEventFunc func(tcp *Client, content []byte)
 
 // 设置收到消息的回调函数
+// 回调函数同步执行，不能使阻塞的函数
 func SetOnMessage(f ...OnClientEventFunc) ClientOption {
 	return func(tcp *Client) {
 		tcp.onMessageCallback = append(tcp.onMessageCallback, f...)
@@ -44,6 +46,12 @@ func SetOnMessage(f ...OnClientEventFunc) ClientOption {
 func SetCoder(coder ICoder) ClientOption {
 	return func(tcp *Client) {
 		tcp.coder = coder
+	}
+}
+
+func SetBufferSize(size int) ClientOption {
+	return func(tcp *Client) {
+		tcp.bufferSize = size
 	}
 }
 
@@ -60,6 +68,7 @@ func NewClient(ctx context.Context, ip string, port int, opts ...ClientOption) *
 		port:              port,
 		ctx:               ctx,
 		coder:             &Coder{},
+		bufferSize:        4096,
 	}
 	for _, f := range opts {
 		f(c)
@@ -160,7 +169,7 @@ func (tcp *Client) Connect() {
 			if tcp.status & statusConnect <= 0  {
 				break
 			}
-			readBuffer := make([]byte, 4096)
+			readBuffer := make([]byte, tcp.bufferSize)
 			size, err  := tcp.conn.Read(readBuffer)
 			if err != nil || size <= 0 {
 				log.Warnf("client read with error: %+v", err)
