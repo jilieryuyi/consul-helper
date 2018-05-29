@@ -6,9 +6,7 @@ import (
 	"time"
 )
 
-type coder struct {
-
-}
+type coder struct {}
 
 func (c coder) Encode(msg []byte) []byte {
 	return msg
@@ -19,6 +17,7 @@ func (c coder) Decode(data []byte) ([]byte, int, error) {
 }
 
 func main() {
+	//simple http client, try to connect to www.baidu.com
 	client := tcp.NewSyncClient(
 		"14.215.177.39",
 		80,
@@ -33,7 +32,7 @@ func main() {
 		return
 	}
 	defer client.Disconnect()
-	d := "GET /index.html HTTP/1.1\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8\r\nUser-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36\r\nHost: www.baidu.com\r\nAccept-Language:zh-cn\r\n\r\nhello"
-	res, e := client.Send([]byte(d))
+	data := "GET /index.html HTTP/1.1\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8\r\nUser-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36\r\nHost: www.baidu.com\r\nAccept-Language:zh-cn\r\n\r\nhello"
+	res, e := client.Send([]byte(data))
 	fmt.Println(string(res), e)
 }

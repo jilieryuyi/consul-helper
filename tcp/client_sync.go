@@ -9,12 +9,6 @@ import (
 	"time"
 )
 
-//const asyncWriteChanLen = 10000
-//var NotConnect          = errors.New("not connect")
-//const (
-//	statusConnect = 1 << iota
-//)
-
 type SyncClient struct {
 	ctx               context.Context
 	buffer            []byte
@@ -98,7 +92,8 @@ func (tcp *SyncClient) Send(data []byte) ([]byte, error) {
 		tcp.conn.SetWriteDeadline(time.Now().Add(tcp.writeTimeout))
 		defer tcp.conn.SetWriteDeadline(time.Time{})
 	}
-	n, err := tcp.conn.Write(data)
+	sendMsg := tcp.coder.Encode(data)
+	n, err := tcp.conn.Write(sendMsg)
 	if n <= 0 || err != nil {
 		return nil, err
 	}
@@ -113,8 +108,8 @@ func (tcp *SyncClient) Send(data []byte) ([]byte, error) {
 		log.Warnf("client read with error: %+v", err)
 		return nil, err
 	}
-	//fmt.Println("receive: ", string(readBuffer[:size]))
-	return readBuffer[:size], nil
+	res, _, err :=tcp.coder.Decode(readBuffer[:size])
+	return res, err
 }
 
 // use like go tcp.Connect()
@@ -137,7 +132,6 @@ func (tcp *SyncClient) Connect() error {
 
 func (tcp *SyncClient) Disconnect() {
 	if tcp.status & statusConnect <= 0 {
-		//log.Debugf("client is in disconnect status")
 		return
 	}
 	tcp.conn.Close()
