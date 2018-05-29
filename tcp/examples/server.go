@@ -14,6 +14,7 @@ func main() {
 		node.Send(sendData)
 	}))
 	server.Start()
+	defer server.Close()
 
 	time.Sleep(time.Second)
 	client := tcp.NewClient(context.Background(), "127.0.0.1", 7770)
