@@ -22,14 +22,19 @@ func main() {
 	}
 	defer client.Disconnect()
 
-	w1, _   := client.Send([]byte("hello"))
-	w2, _   := client.Send([]byte("word"))
-	w3, _   := client.Send([]byte("hahahahahahahahahahah"))
-	res1, _ := w1.Wait(time.Second * 3)
-	res2, _ := w2.Wait(time.Second * 3)
-	res3, _ := w3.Wait(time.Second * 3)
+	start := time.Now()
+	times := 1000
+	for i := 0; i < times; i++ {
+		w1, _ := client.Send([]byte("hello"))
+		w2, _ := client.Send([]byte("word"))
+		w3, _ := client.Send([]byte("hahahahahahahahahahah"))
+		res1, _ := w1.Wait(time.Second * 3)
+		res2, _ := w2.Wait(time.Second * 3)
+		res3, _ := w3.Wait(time.Second * 3)
 
-	fmt.Println("w1 return: ", string(res1))
-	fmt.Println("w2 return: ", string(res2))
-	fmt.Println("w3 return: ", string(res3))
+		fmt.Println("w1 return: ", string(res1))
+		fmt.Println("w2 return: ", string(res2))
+		fmt.Println("w3 return: ", string(res3))
+	}
+	fmt.Println("use time ", time.Since(start).Nanoseconds()/int64(times)/1000000, "ms")
 }
