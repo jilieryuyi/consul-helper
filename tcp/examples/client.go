@@ -18,12 +18,13 @@ func main() {
 	err     := client.Connect(address, time.Second * 3)
 
 	if err != nil {
-		logrus.Errorf("connect to %v error: %v", address, err)
+		logrus.Panicf("connect to %v error: %v", address, err)
+		return
 	}
 	defer client.Disconnect()
 
 	start := time.Now()
-	times := 1000
+	times := 10000
 	for i := 0; i < times; i++ {
 		w1, _ := client.Send([]byte("hello"))
 		w2, _ := client.Send([]byte("word"))
