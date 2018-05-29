@@ -180,11 +180,11 @@ func (node *TcpClientNode) onMessage(msg []byte) {
 			log.Errorf("pos %v(olen=%v) error, cmd=%v, content=%v(%v) len is %v, data is: %+v", pos,olen, cmd, content, string(content), len(node.recvBuf), node.recvBuf)
 			//return
 		}
-		if !hasCmd(cmd) {
-			node.recvBuf = make([]byte, 0)
-			log.Errorf("cmd（%v）does not exists", cmd)
-			return
-		}
+		//if !hasCmd(cmd) {
+		//	node.recvBuf = make([]byte, 0)
+		//	log.Errorf("cmd（%v）does not exists", cmd)
+		//	return
+		//}
 		for _, f := range node.onServerEvents {
 			f(node, cmd, content)
 		}

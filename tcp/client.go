@@ -29,10 +29,12 @@ type Client struct {
 	ip                string
 	port              int
 	coder             ICoder
+	onConnect         OnConnectFunc
 }
 
 type ClientOption      func(tcp *Client)
 type OnClientEventFunc func(tcp *Client, content []byte)
+type OnConnectFunc     func(tcp *Client)
 
 // 设置收到消息的回调函数
 // 回调函数同步执行，不能使阻塞的函数
@@ -52,6 +54,12 @@ func SetCoder(coder ICoder) ClientOption {
 func SetBufferSize(size int) ClientOption {
 	return func(tcp *Client) {
 		tcp.bufferSize = size
+	}
+}
+
+func SetOnConnect(onCnnect OnConnectFunc) ClientOption {
+	return func(tcp *Client) {
+		tcp.onConnect = onCnnect
 	}
 }
 
@@ -164,11 +172,17 @@ func (tcp *Client) Connect() {
 			time.Sleep(time.Second)
 			continue
 		}
-		log.Debugf("====================client connect to %v:%v ok====================", tcp.ip, tcp.port)
+
+		if tcp.onConnect != nil {
+			tcp.onConnect(tcp)
+		}
+
+		log.Infof("====================client connect to %v:%v ok====================", tcp.ip, tcp.port)
 		for {
 			if tcp.status & statusConnect <= 0  {
 				break
 			}
+			log.Infof("start read message %v", tcp.bufferSize)
 			readBuffer := make([]byte, tcp.bufferSize)
 			size, err  := tcp.conn.Read(readBuffer)
 			if err != nil || size <= 0 {
@@ -176,6 +190,7 @@ func (tcp *Client) Connect() {
 				tcp.Disconnect()
 				break
 			}
+			fmt.Println("receive: ", string(readBuffer[:size]))
 			tcp.onMessage(readBuffer[:size])
 			select {
 			case <-tcp.ctx.Done():
