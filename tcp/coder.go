@@ -1,7 +1,11 @@
-package agent
+package tcp
 
-import "encoding/binary"
-
+import (
+	"encoding/binary"
+	"errors"
+)
+const MAX_PACKAGE_LEN = 1024000
+var MaxPackError = errors.New("package len max then limit")
 type ICoder interface {
 	Encode(msg []byte) []byte
 	Decode(data []byte) ([]byte, int, error)

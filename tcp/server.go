@@ -1,4 +1,4 @@
-package agent
+package tcp
 
 import (
 	log "github.com/sirupsen/logrus"

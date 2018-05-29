@@ -1,4 +1,4 @@
-package agent
+package tcp
 
 const (
 	CMD_ERROR = iota + 1    // 错误响应
