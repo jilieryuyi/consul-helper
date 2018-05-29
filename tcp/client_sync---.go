@@ -12,6 +12,8 @@ import (
 
 const asyncWriteChanLen = 10000
 var NotConnect          = errors.New("not connect")
+var IsConnected         = errors.New("is connected")
+
 const (
 	statusConnect = 1 << iota
 )
