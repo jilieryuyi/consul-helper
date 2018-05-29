@@ -280,7 +280,7 @@ func (tcp *Client) Connect() {
 				tcp.Disconnect()
 				break
 			}
-			fmt.Println("receive: ", string(readBuffer[:size]))
+			log.Infof("\r\n\r\n#################client receive: %v, ==%+v==", string(readBuffer[:size]), readBuffer[:size])
 			tcp.onMessage(readBuffer[:size])
 			select {
 			case <-tcp.ctx.Done():
@@ -299,20 +299,33 @@ func (tcp *Client) onMessage(msg []byte) {
 		}
 	}()
 	tcp.buffer = append(tcp.buffer, msg...)
+	log.Infof("#########################buffer %+v, %+v", tcp.buffer, string(tcp.buffer))
+
 	for {
+		//time.Sleep(time.Second)
 		olen := len(tcp.buffer)
+		log.Infof("#########################buffer %+v, %+v", tcp.buffer, string(tcp.buffer))
 		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
+		//log.Infof("decode= %v, %v, %v, %v", msgId, string(content), pos, err)
 		if err != nil {
 			log.Errorf("%v", err)
 			tcp.buffer = make([]byte, 0)
 			return
 		}
+		if msgId <= 0  {
+			//log.Errorf("msgId <= 0")
+			//tcp.buffer = make([]byte, 0)
+			return
+		}
 		if len(tcp.buffer) >= pos {
 			tcp.buffer = append(tcp.buffer[:0], tcp.buffer[pos:]...)
+
 		} else {
 			tcp.buffer = make([]byte, 0)
 			log.Errorf("pos %v (olen=%v) error, content=%v(%v) len is %v, data is: %+v", pos, olen, content, string(content), len(tcp.buffer), tcp.buffer)
 		}
+		log.Infof("222#########################buffer %+v, %+v", tcp.buffer, string(tcp.buffer))
+
 		tcp.resChan <- &res{MsgId:msgId, Data:content}
 		for _, f := range tcp.onMessageCallback {
 			f(tcp, content)
