@@ -8,6 +8,7 @@ import (
 	"sync"
 	"context"
 	"errors"
+	"sync/atomic"
 )
 
 const asyncWriteChanLen = 10000
@@ -32,6 +33,32 @@ type Client struct {
 	port              int
 	coder             ICodec
 	onConnect         OnConnectFunc
+	msgId             int64
+
+	waiter            map[int64]*Waiter
+	addWaiter         chan *Waiter
+}
+
+type Waiter struct {
+	MsgId int64
+	Data chan []byte
+	Time int64
+}
+var WaitTimeout = errors.New("wait timeout")
+var ChanIsClosed = errors.New("wait is closed")
+var UnknownError = errors.New("unknown error")
+func (w *Waiter) Wait(timeout time.Duration) ([]byte, error) {
+	a := time.After(timeout)
+	select {
+	case data ,ok := <- w.Data:
+		if !ok {
+			return nil, ChanIsClosed
+		}
+		return data, nil
+	case <- a:
+		return nil, WaitTimeout
+	}
+	return nil, UnknownError
 }
 
 type ClientOption      func(tcp *Client)
@@ -79,6 +106,9 @@ func NewClient(ctx context.Context, ip string, port int, opts ...ClientOption) *
 		ctx:               ctx,
 		coder:             &Codec{},
 		bufferSize:        4096,
+		msgId:             0,
+		waiter:            make(map[int64]*Waiter),
+		addWaiter:         make(chan *Waiter, 10000),
 	}
 	for _, f := range opts {
 		f(c)
@@ -99,15 +129,26 @@ func (tcp *Client) AsyncWrite(data []byte) {
 	tcp.asyncWriteChan <- data
 }
 
-func (tcp *Client) Write(data []byte) (int, error) {
+func (tcp *Client) Send(data []byte) (*Waiter, error) {
 	if tcp.status & statusConnect <= 0 {
-		return 0, NotConnect
+		return nil, NotConnect
 	}
-	return tcp.conn.Write(data)
+	msgId   := atomic.AddInt64(&tcp.msgId, 1)
+	sendMsg := tcp.coder.Encode(msgId, data)
+	_, err  := tcp.conn.Write(sendMsg)
+	if err != nil {
+		return nil, err
+	}
+	wai := &Waiter{
+		MsgId: msgId,
+		Data:  make(chan []byte, 1),
+		Time:  int64(time.Now().UnixNano() / 1000000),
+	}
+	tcp.addWaiter <- wai
+	return wai, nil
 }
 
 func (tcp *Client) keep() {
-	data  := tcp.coder.Encode(0, []byte(""))
 	c     := make(chan struct{})
 	go func() {
 		for {
@@ -119,19 +160,21 @@ func (tcp *Client) keep() {
 		select {
 		case <- c :
 			// keepalive
-			tcp.Write(data)
+			tcp.Send([]byte(""))
 		case sendData, ok := <- tcp.asyncWriteChan:
 			//async send support
 			if !ok {
 				return
 			}
-			n, err := tcp.Write(sendData)
+			_, err := tcp.Send(sendData)
 			if err != nil {
 				log.Errorf("send failure: %+v", err)
 			}
-			if n < len(sendData) {
-				log.Errorf("send not complete")
-			}
+			//if n < len(sendData) {
+			//	log.Errorf("send not complete")
+			//}
+		case wai := <- tcp.addWaiter:
+			tcp.waiter[wai.MsgId] = wai
 		}
 	}
 }
