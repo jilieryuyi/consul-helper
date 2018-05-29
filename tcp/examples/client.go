@@ -36,5 +36,5 @@ func main() {
 		fmt.Println("w2 return: ", string(res2))
 		fmt.Println("w3 return: ", string(res3))
 	}
-	fmt.Println("use time ", time.Since(start).Nanoseconds()/int64(times)/1000000, "ms")
+	fmt.Println("avg use time ", time.Since(start).Nanoseconds()/int64(times)/1000000, "ms")
 }
