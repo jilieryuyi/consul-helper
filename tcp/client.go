@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"sync/atomic"
+	"fmt"
 )
 
 var (
@@ -167,13 +168,16 @@ func (tcp *Client) keep() {
 		case <- c :
 			// keepalive
 			tcp.Send([]byte(""))
+			start := time.Now()
 			for msgId, v := range tcp.waiter  {
 				// check timeout
 				if int64(time.Now().UnixNano() / 1000000) - v.Time >= 6000 {
+					log.Warnf("msgid %v is timeout, will delete", msgId)
 					close(v.Data)
 					delete(tcp.waiter, msgId)
 				}
 			}
+			fmt.Println("check timeout use time ", time.Since(start))
 		case sendData, ok := <- tcp.asyncWriteChan:
 			//async send support
 			if !ok {
@@ -188,6 +192,7 @@ func (tcp *Client) keep() {
 			if !ok {
 				return
 			}
+			log.Infof("add waiter %v", wai.MsgId)
 			tcp.waiter[wai.MsgId] = wai
 			// server reply, write data to channel
 		case res, ok := <- tcp.resChan:
@@ -197,6 +202,8 @@ func (tcp *Client) keep() {
 			w, ok := tcp.waiter[res.MsgId]
 			if ok {
 				w.Data <- &waiterData{tcp.delwaiter, res.Data, res.MsgId}
+			} else {
+				log.Warnf("%v waiter does not exists", res.MsgId)
 			}
 		case msgId, ok := <- tcp.delwaiter:
 			if !ok {
@@ -224,7 +231,9 @@ func (tcp *Client) readMessage() {
 			tcp.Disconnect()
 			continue
 		}
+		start:=time.Now()
 		tcp.onMessage(readBuffer[:size])
+		fmt.Println("onMessage use time ", time.Since(start))
 		select {
 		case <-tcp.ctx.Done():
 			return
