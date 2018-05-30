@@ -16,6 +16,7 @@ var (
 	MaxPackError = errors.New("package len max then limit")
 	DataLenError = errors.New("data len error")
 	InvalidPackage = errors.New("invalid package")
+	PackageHeader = []byte{255, 255, 255, 255}
 )
 
 type ICodec interface {
@@ -52,9 +53,8 @@ func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
 		return 0, nil, 0, nil
 	}
 	startPos := 4
-	header := []byte{255, 255, 255, 255}
-	if !bytes.Equal(data[:4], header) {
-		i := bytes.Index(data, header)
+	if !bytes.Equal(data[:4], PackageHeader) {
+		i := bytes.Index(data, PackageHeader)
 		if i < 0 {
 			// 没有找到header，说明这个包为非法包，可以丢弃
 			return 0, nil, 0, InvalidPackage
