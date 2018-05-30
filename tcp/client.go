@@ -314,7 +314,10 @@ func (tcp *Client) onMessage(msg []byte) {
 			tcp.buffer = make([]byte, 0)
 			log.Errorf("pos %v (olen=%v) error, content=%v(%v) len is %v, data is: %+v", pos, bufferLen, content, string(content), len(tcp.buffer), tcp.buffer)
 		}
-		tcp.resChan <- &res{MsgId:msgId, Data:content}
+		// 1 is system id
+		if msgId > 1 {
+			tcp.resChan <- &res{MsgId: msgId, Data: content}
+		}
 		for _, f := range tcp.onMessageCallback {
 			f(tcp, content)
 		}
