@@ -224,7 +224,7 @@ func (tcp *Client) keep() {
 			if ok {
 				w.Data <- &waiterData{tcp.delwaiter, res.Data, res.MsgId}
 			} else {
-				log.Warnf("%v waiter does not exists", res.MsgId)
+				log.Warnf("warning: %v waiter does not exists", res.MsgId)
 			}
 		case msgId, ok := <- tcp.delwaiter:
 			if !ok {
