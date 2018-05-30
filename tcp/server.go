@@ -7,7 +7,7 @@ import (
 	"time"
 	"context"
 )
-
+type TcpClients []*TcpClientNode
 type TcpService struct {
 	Address string               // 监听ip
 	lock *sync.Mutex
@@ -114,6 +114,7 @@ func (tcp *TcpService) Close() {
 
 // 心跳
 func (tcp *TcpService) keepalive() {
+	keepalive := tcp.codec.Encode(1, []byte("keepalive response ok"))
 	for {
 		select {
 		case <-tcp.ctx.Done():
@@ -124,7 +125,7 @@ func (tcp *TcpService) keepalive() {
 			time.Sleep(time.Second * 3)
 			continue
 		}
-		tcp.agents.asyncSend(packDataTickOk)
+		tcp.agents.asyncSend(keepalive)
 		time.Sleep(time.Second * 3)
 	}
 }

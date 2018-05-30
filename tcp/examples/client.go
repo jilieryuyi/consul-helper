@@ -24,8 +24,8 @@ func main() {
 	defer client.Disconnect()
 
 	start := time.Now()
-	times := 10000
-	for i := 0; i < times; i++ {
+	times := 1000000
+	for  {
 		w1, _ := client.Send([]byte("hello"))
 		w2, _ := client.Send([]byte("word"))
 		w3, _ := client.Send([]byte("hahahahahahahahahahah"))

@@ -8,6 +8,12 @@ import (
 	"io"
 	"context"
 )
+const (
+	tcpMaxSendQueue = 10000
+	tcpNodeOnline   = 1 << iota
+)
+type NodeFunc   func(n *TcpClientNode)
+type NodeOption func(n *TcpClientNode)
 
 type TcpClientNode struct {
 	conn *net.Conn   // 客户端连接进来的资源句柄

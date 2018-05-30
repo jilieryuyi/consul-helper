@@ -15,7 +15,6 @@ func (c *TcpClients) send(msgId int64, data []byte) {
 
 func (c *TcpClients) asyncSend(data []byte) {
 	for _, node := range *c {
-		//log.Debugf("%v node keepalive", key)
 		node.AsyncSend(data)
 	}
 }
