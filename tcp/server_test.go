@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 	"bytes"
-	"github.com/sirupsen/logrus"
 	"fmt"
 )
 
@@ -23,7 +22,7 @@ func TestNewServer(t *testing.T) {
 	err     := client.Connect(address, time.Second * 3)
 
 	if err != nil {
-		logrus.Panicf("connect to %v error: %v", address, err)
+		t.Errorf("connect to %v error: %v", address, err)
 		return
 	}
 	defer client.Disconnect()
