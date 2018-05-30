@@ -61,7 +61,6 @@ func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
 		}
 		startPos = i + 4
 	}
-
 	if len(data) > PackageMaxLength {
 		logrus.Infof("max len error")
 		return 0, nil, 0, MaxPackError
@@ -69,7 +68,6 @@ func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
 	if len(data) < PackageMinLength {
 		return 0, nil, 0, nil
 	}
-
 	clen := int(binary.LittleEndian.Uint32(data[startPos:startPos+4]))
 	if clen < ContentMinLen {
 		return 0, nil, 0, DataLenError
@@ -77,9 +75,9 @@ func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
 	if len(data) < clen + 8 {
 		return 0, nil, 0, nil
 	}
-	msgId := int64(binary.LittleEndian.Uint64(data[startPos+4:startPos+12]))
+	msgId   := int64(binary.LittleEndian.Uint64(data[startPos+4:startPos+12]))
 	content := make([]byte, len(data[startPos+12 : startPos + clen + 4 ]))
 	copy(content, data[startPos+12 : startPos + clen + 4])
-	return int64(msgId), content, startPos + clen + 4, nil
+	return msgId, content, startPos + clen + 4, nil
 }
 

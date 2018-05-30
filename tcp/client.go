@@ -199,6 +199,7 @@ func (tcp *Client) keep() {
 			}
 		}
 		tcp.waiterLock.Unlock()
+		fmt.Println("#######################tcp.waiter len ", len(tcp.waiter))
 		time.Sleep(time.Second * 3)
 	}
 }
