@@ -9,6 +9,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"fmt"
+	"os"
 )
 
 var (
@@ -38,7 +39,8 @@ type Client struct {
 	msgId             int64
 
 	waiter            map[int64] *waiter
-	addwaiter         chan *waiter
+	//addwaiter         chan *waiter
+	waiterLock        *sync.RWMutex
 	resChan           chan *res
 	delwaiter         chan int64
 }
@@ -120,9 +122,10 @@ func NewClient(ctx context.Context, opts ...ClientOption) *Client {
 		bufferSize:        4096,
 		msgId:             1,
 		waiter:            make(map[int64]*waiter),
-		addwaiter:         make(chan *waiter, 10000),
+		//addwaiter:         make(chan *waiter, 10000),
 		resChan:           make(chan *res, 10000),
 		delwaiter:         make(chan int64, 10000),
+		waiterLock:        new(sync.RWMutex),
 	}
 	for _, f := range opts {
 		f(c)
@@ -141,18 +144,19 @@ func (tcp *Client) Send(data []byte) (*waiter, error) {
 		return nil, NotConnect
 	}
 	msgId   := atomic.AddInt64(&tcp.msgId, 1)
-	sendMsg := tcp.coder.Encode(msgId, data)
-	_, err  := tcp.conn.Write(sendMsg)
-	if err != nil {
-		return nil, err
-	}
 	wai := &waiter{
 		MsgId: msgId,
 		Data:  make(chan *waiterData, 1),
 		Time:  int64(time.Now().UnixNano() / 1000000),
 	}
-	tcp.addwaiter <- wai
-	return wai, nil
+	fmt.Println("add waiter ", wai.MsgId)
+	tcp.waiterLock.Lock()
+	tcp.waiter[wai.MsgId] = wai
+	tcp.waiterLock.Unlock()
+
+	sendMsg := tcp.coder.Encode(msgId, data)
+	_, err  := tcp.conn.Write(sendMsg)
+	return wai, err
 }
 
 func (tcp *Client) keep() {
@@ -163,12 +167,34 @@ func (tcp *Client) keep() {
 			time.Sleep(time.Second * 3)
 		}
 	}()
+	go func() {
+		for {
+			tcp.Send([]byte(""))
+			time.Sleep(time.Second * 3)
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case sendData, ok := <- tcp.asyncWriteChan:
+				//async send support
+				if !ok {
+					return
+				}
+				_, err := tcp.Send(sendData)
+				if err != nil {
+					log.Errorf("send failure: %+v", err)
+				}
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <- c :
-			// keepalive
-			tcp.Send([]byte(""))
 			start := time.Now()
+			tcp.waiterLock.Lock()
 			for msgId, v := range tcp.waiter  {
 				// check timeout
 				if int64(time.Now().UnixNano() / 1000000) - v.Time >= 6000 {
@@ -177,29 +203,24 @@ func (tcp *Client) keep() {
 					delete(tcp.waiter, msgId)
 				}
 			}
+			tcp.waiterLock.Unlock()
 			fmt.Println("check timeout use time ", time.Since(start))
-		case sendData, ok := <- tcp.asyncWriteChan:
-			//async send support
-			if !ok {
-				return
-			}
-			_, err := tcp.Send(sendData)
-			if err != nil {
-				log.Errorf("send failure: %+v", err)
-			}
+
 			// new send
-		case wai, ok := <- tcp.addwaiter:
-			if !ok {
-				return
-			}
-			log.Infof("add waiter %v", wai.MsgId)
-			tcp.waiter[wai.MsgId] = wai
+		//case wai, ok := <- tcp.addwaiter:
+		//	if !ok {
+		//		return
+		//	}
+		//	log.Infof("add waiter %v", wai.MsgId)
+		//	tcp.waiter[wai.MsgId] = wai
 			// server reply, write data to channel
 		case res, ok := <- tcp.resChan:
 			if !ok {
 				return
 			}
+			tcp.waiterLock.RLock()
 			w, ok := tcp.waiter[res.MsgId]
+			tcp.waiterLock.RUnlock()
 			if ok {
 				w.Data <- &waiterData{tcp.delwaiter, res.Data, res.MsgId}
 			} else {
@@ -209,11 +230,13 @@ func (tcp *Client) keep() {
 			if !ok {
 				return
 			}
+			tcp.waiterLock.Lock()
 			w, ok:=tcp.waiter[msgId]
 			if ok {
 				close(w.Data)
 				delete(tcp.waiter, msgId)
 			}
+			tcp.waiterLock.Unlock()
 		}
 	}
 }
@@ -275,6 +298,7 @@ func (tcp *Client) onMessage(msg []byte) {
 	tcp.buffer = append(tcp.buffer, msg...)
 	for {
 		bufferLen := len(tcp.buffer)
+		fmt.Fprintf(os.Stderr, "%v\r\n", tcp.buffer)
 		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
 		if err != nil {
 			log.Errorf("%v", err)
