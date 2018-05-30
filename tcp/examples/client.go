@@ -6,6 +6,7 @@ import (
 	"time"
 	"fmt"
 	"github.com/sirupsen/logrus"
+	"bytes"
 )
 func main() {
 	// 先运行server端
@@ -25,13 +26,19 @@ func main() {
 	start := time.Now()
 	times := 1000000
 	for  {
-		w1, _ := client.Send([]byte("hello"))
-		w2, _ := client.Send([]byte("word"))
-		w3, _ := client.Send([]byte("hahahahahahahahahahah"))
+		data1 := []byte("hello")
+		data2 := []byte("word")
+		data3 := []byte("hahahahahahahahahahah")
+		w1, _ := client.Send(data1)
+		w2, _ := client.Send(data2)
+		w3, _ := client.Send(data3)
 		res1, _ := w1.Wait(time.Second * 3)
 		res2, _ := w2.Wait(time.Second * 3)
 		res3, _ := w3.Wait(time.Second * 3)
 
+		if !bytes.Equal(data1, res1) || !bytes.Equal(data2, res2) || !bytes.Equal(data3, res3) {
+			logrus.Panicf("error")
+		}
 		fmt.Println("w1 return: ", string(res1))
 		fmt.Println("w2 return: ", string(res2))
 		fmt.Println("w3 return: ", string(res3))

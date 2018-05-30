@@ -298,7 +298,7 @@ func (tcp *Client) onMessage(msg []byte) {
 	tcp.buffer = append(tcp.buffer, msg...)
 	for {
 		bufferLen := len(tcp.buffer)
-		fmt.Fprintf(os.Stderr, "%v\r\n", tcp.buffer)
+		fmt.Fprintf(os.Stderr, "%v===========%v\r\n", string(tcp.buffer), tcp.buffer)
 		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
 		if err != nil {
 			log.Errorf("%v", err)
