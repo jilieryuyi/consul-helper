@@ -6,6 +6,7 @@ import (
 	"time"
 	"bytes"
 	"fmt"
+	"net"
 )
 
 func TestNewServer(t *testing.T) {
@@ -17,6 +18,14 @@ func TestNewServer(t *testing.T) {
 	defer server.Close()
 	time.Sleep(time.Second)
 
+	go func() {
+		dial := net.Dialer{Timeout: time.Second * 3}
+		conn, _ := dial.Dial("tcp", address)
+		for {
+			conn.Write([]byte("你好曲儿个人感情如"))
+		}
+	}()
+
 
 	client  := NewClient(context.Background())
 	err     := client.Connect(address, time.Second * 3)
@@ -27,7 +36,7 @@ func TestNewServer(t *testing.T) {
 	}
 	defer client.Disconnect()
 	start := time.Now()
-	times := 10000
+	times := 1000
 	for  i := 0; i < times; i++ {
 		data1 := []byte("hello")
 		data2 := []byte("word")
@@ -41,6 +50,7 @@ func TestNewServer(t *testing.T) {
 
 		if !bytes.Equal(data1, res1) || !bytes.Equal(data2, res2) || !bytes.Equal(data3, res3) {
 			t.Errorf("error")
+			return
 		}
 		fmt.Println("w1 return: ", string(res1))
 		fmt.Println("w2 return: ", string(res2))

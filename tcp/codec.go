@@ -4,11 +4,21 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/sirupsen/logrus"
+	"bytes"
+	"fmt"
 )
 
-const MAX_PACKAGE_LEN = 1024000
-var MaxPackError = errors.New("package len max then limit")
-var DataLenError = errors.New("data len error")
+const (
+	PackageMaxLength = 1024000
+	PackageMinLength = 16
+	ContentMinLen = 8
+)
+var (
+	MaxPackError = errors.New("package len max then limit")
+	DataLenError = errors.New("data len error")
+	InvalidPackage = errors.New("invalid package")
+)
+
 type ICodec interface {
 	Encode(msgId int64, msg []byte) []byte
 	Decode(data []byte) (int64, []byte, int, error)
@@ -16,38 +26,72 @@ type ICodec interface {
 type Codec struct {}
 
 func (c Codec) Encode(msgId int64, msg []byte) []byte {
+	// 为了增强容错性，这里加入4字节的header支持
+
+	// 【4字节header长度】 【4字节的内容长度】 【8自己的消息id】 【实际的内容长度】
+	// 内容长度 == 【8自己的消息id】 + 【实际的内容长度】
 	l  := len(msg)
-	r  := make([]byte, l + 12)
+	r  := make([]byte, 4 + l + 4 + 8)
+
+	r[0] = byte(255)
+	r[1] = byte(255)
+	r[2] = byte(255)
+	r[3] = byte(255)
+
+	// 具体存放的内容长度是去除4字节后的长度
 	cl := l + 8
-	binary.LittleEndian.PutUint32(r[:4], uint32(cl))
-	binary.LittleEndian.PutUint64(r[4:12], uint64(msgId))
-	copy(r[12:], msg)
+	binary.LittleEndian.PutUint32(r[4:8], uint32(cl))
+	binary.LittleEndian.PutUint64(r[8:16], uint64(msgId))
+	copy(r[16:], msg)
 	return r
 }
 
 // 这里的第一个返回值是解包之后的实际报内容
 // 第二个返回值是读取了的包长度
 func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
+	fmt.Println(data)
 	if data == nil || len(data) == 0 {
 		return 0, nil, 0, nil
 	}
-	if len(data) > MAX_PACKAGE_LEN {
+
+	startPos := 4
+	header := []byte{255, 255, 255, 255}
+	if !bytes.Equal(data[:4], header) {
+		i := bytes.Index(data, header)
+		if i < 0 {
+			// 没有找到header，说明这个包为非法包，可以丢弃
+			return 0, nil, 0, InvalidPackage
+		}
+		startPos = i + 4
+	}
+
+	if len(data) > PackageMaxLength {
 		logrus.Infof("max len error")
 		return 0, nil, 0, MaxPackError
 	}
-	if len(data) < 12 {
+	if len(data) < PackageMinLength {
 		return 0, nil, 0, nil
 	}
-	clen := int(binary.LittleEndian.Uint32(data[:4]))
-	if clen < 8 {
+
+	fmt.Println("start pos", startPos)
+	//header  := data[:4]
+	//fmt.Println(header)
+	fmt.Println(data[startPos:startPos+4])
+	clen := int(binary.LittleEndian.Uint32(data[startPos:startPos+4]))
+	fmt.Println("content len = ", clen)
+	if clen < ContentMinLen {
 		return 0, nil, 0, DataLenError
 	}
-	if len(data) < clen + 4 {
+	if len(data) < clen + 8 {
 		return 0, nil, 0, nil
 	}
-	cmd     := int64(binary.LittleEndian.Uint64(data[4:12]))
-	content := make([]byte, len(data[12 : clen + 4]))
-	copy(content, data[12 : clen + 4])
-	return int64(cmd), content, clen + 4, nil
+	fmt.Println("msgid ", data[startPos+4:startPos+12])
+	msgId := int64(binary.LittleEndian.Uint64(data[startPos+4:startPos+12]))
+	fmt.Println("msgid = ", msgId)
+	content := make([]byte, len(data[startPos+12 : startPos + clen + 4 ]))
+	copy(content, data[startPos+12 : startPos + clen + 4])
+	fmt.Println(string(content))
+
+	return int64(msgId), content, startPos + clen + 4, nil
 }
 
