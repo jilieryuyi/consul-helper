@@ -5,13 +5,16 @@ import (
 	"errors"
 	"github.com/sirupsen/logrus"
 )
+
 const MAX_PACKAGE_LEN = 1024000
 var MaxPackError = errors.New("package len max then limit")
+var DataLenError = errors.New("data len error")
 type ICodec interface {
 	Encode(msgId int64, msg []byte) []byte
 	Decode(data []byte) (int64, []byte, int, error)
 }
 type Codec struct {}
+
 func (c Codec) Encode(msgId int64, msg []byte) []byte {
 	l  := len(msg)
 	r  := make([]byte, l + 12)

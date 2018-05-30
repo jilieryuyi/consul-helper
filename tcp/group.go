@@ -13,9 +13,9 @@ func (c *TcpClients) send(msgId int64, data []byte) {
 	}
 }
 
-func (c *TcpClients) asyncSend(data []byte) {
+func (c *TcpClients) asyncSend(msgId int64, data []byte) {
 	for _, node := range *c {
-		node.AsyncSend(data)
+		node.AsyncSend(msgId, data)
 	}
 }
 

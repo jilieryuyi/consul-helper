@@ -1,13 +1,13 @@
 package tcp
 
 import (
-	"time"
 	"net"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"io"
 	"context"
 )
+
 const (
 	tcpMaxSendQueue = 10000
 	tcpNodeOnline   = 1 << iota
@@ -16,24 +16,19 @@ type NodeFunc   func(n *TcpClientNode)
 type NodeOption func(n *TcpClientNode)
 
 type TcpClientNode struct {
-	conn *net.Conn   // 客户端连接进来的资源句柄
-	sendQueue chan []byte // 发送channel
-	sendFailureTimes int64       // 发送失败次数
-	recvBuf []byte      // 读缓冲区
-	connectTime int64       // 连接成功的时间戳
-	recvBufLock *sync.Mutex
-	status int
-	wg *sync.WaitGroup
-	lock *sync.Mutex          // 互斥锁，修改资源时锁定
-	onclose []NodeFunc
-	ctx context.Context
-	onMessageCallback []OnServerEventFunc
-	codec ICodec
+	conn              *net.Conn
+	sendQueue         chan []byte
+	recvBuf           []byte
+	status            int
+	wg                *sync.WaitGroup
+	lock              *sync.Mutex
+	onclose           []NodeFunc
+	ctx               context.Context
+	onMessageCallback []OnServerMessageFunc
+	codec             ICodec
 }
 
-type OnPullCommandFunc func(node *TcpClientNode)
-
-func setOnServerEvents(f ...OnServerEventFunc) NodeOption {
+func setOnMessage(f ...OnServerMessageFunc) NodeOption {
 	return func(n *TcpClientNode) {
 		n.onMessageCallback = append(n.onMessageCallback, f...)
 	}
@@ -41,19 +36,16 @@ func setOnServerEvents(f ...OnServerEventFunc) NodeOption {
 
 func newNode(ctx context.Context, conn *net.Conn, codec ICodec, opts ...NodeOption) *TcpClientNode {
 	node := &TcpClientNode{
-		conn:             conn,
-		sendQueue:        make(chan []byte, tcpMaxSendQueue),
-		sendFailureTimes: 0,
-		connectTime:      time.Now().Unix(),
-		recvBuf:          make([]byte, 0),
-		status:           tcpNodeOnline,
-		ctx:              ctx,
-		lock:             new(sync.Mutex),
-		onclose:          make([]NodeFunc, 0),
-		wg:               new(sync.WaitGroup),
-		onMessageCallback:   make([]OnServerEventFunc, 0),
-		recvBufLock:      new(sync.Mutex),
-		codec: codec,
+		conn:              conn,
+		sendQueue:         make(chan []byte, tcpMaxSendQueue),
+		recvBuf:           make([]byte, 0),
+		status:            tcpNodeOnline,
+		ctx:               ctx,
+		lock:              new(sync.Mutex),
+		onclose:           make([]NodeFunc, 0),
+		wg:                new(sync.WaitGroup),
+		onMessageCallback: make([]OnServerMessageFunc, 0),
+		codec:             codec,
 	}
 	for _, f := range opts {
 		f(node)
@@ -62,7 +54,7 @@ func newNode(ctx context.Context, conn *net.Conn, codec ICodec, opts ...NodeOpti
 	return node
 }
 
-func NodeClose(f NodeFunc) NodeOption {
+func setOnNodeClose(f NodeFunc) NodeOption {
 	return func(n *TcpClientNode) {
 		n.onclose = append(n.onclose, f)
 	}
@@ -87,16 +79,16 @@ func (node *TcpClientNode) close() {
 }
 
 func (node *TcpClientNode) Send(msgId int64, data []byte) (int, error) {
-	//(*node.conn).SetWriteDeadline(time.Now().Add(time.Second * 3))
 	sendData := node.codec.Encode(msgId, data)
 	return (*node.conn).Write(sendData)
 }
 
-func (node *TcpClientNode) AsyncSend(data []byte) {
+func (node *TcpClientNode) AsyncSend(msgId int64, data []byte) {
 	if node.status & tcpNodeOnline <= 0 {
 		return
 	}
-	node.sendQueue <- data
+	senddata := node.codec.Encode(msgId, data)
+	node.sendQueue <- senddata
 }
 
 func (node *TcpClientNode) asyncSendService() {
@@ -109,19 +101,11 @@ func (node *TcpClientNode) asyncSendService() {
 		}
 		select {
 		case msg, ok := <-node.sendQueue:
-			//start := time.Now()
 			if !ok {
 				log.Info("tcp node sendQueue is closed, sendQueue channel closed.")
 				return
 			}
-			//if len(msg) == 1 && msg[0] == byte(0) {
-			//	close(node.sendQueue)
-			//	log.Warnf("close sendQueue")
-			//	return
-			//}
-			//(*node.conn).SetWriteDeadline(time.Now().Add(time.Second * 30))
 			size, err := (*node.conn).Write(msg)
-			//log.Debugf("send: %+v, to %+v", msg, (*node.conn).RemoteAddr().String())
 			if err != nil {
 				log.Errorf("tcp send to %s error: %v", (*node.conn).RemoteAddr().String(), err)
 				node.close()
@@ -130,7 +114,6 @@ func (node *TcpClientNode) asyncSendService() {
 			if size != len(msg) {
 				log.Errorf("%s send not complete: %v", (*node.conn).RemoteAddr().String(), msg)
 			}
-			//fmt.Fprintf(os.Stderr, "write use time %v\r\n", time.Since(start))
 		case <- node.ctx.Done():
 			log.Debugf("context is closed, wait for exit, left: %d", len(node.sendQueue))
 			if len(node.sendQueue) <= 0 {
@@ -150,7 +133,7 @@ func (node *TcpClientNode) onMessage(msg []byte) {
 	}()
 	node.recvBuf = append(node.recvBuf, msg...)
 	for {
-		olen := len(node.recvBuf)
+		bufferLen := len(node.recvBuf)
 		msgId, content, pos, err := node.codec.Decode(node.recvBuf)
 		if err != nil {
 			node.recvBuf = make([]byte, 0)
@@ -164,7 +147,7 @@ func (node *TcpClientNode) onMessage(msg []byte) {
 			node.recvBuf = append(node.recvBuf[:0], node.recvBuf[pos:]...)
 		} else {
 			node.recvBuf = make([]byte, 0)
-			log.Errorf("pos %v(olen=%v) error, cmd=%v, content=%v(%v) len is %v, data is: %+v", pos,olen, msgId, content, string(content), len(node.recvBuf), node.recvBuf)
+			log.Errorf("pos %v(olen=%v) error, cmd=%v, content=%v(%v) len is %v, data is: %+v", pos, bufferLen, msgId, content, string(content), len(node.recvBuf), node.recvBuf)
 		}
 		for _, f := range node.onMessageCallback {
 			f(node, msgId, content)

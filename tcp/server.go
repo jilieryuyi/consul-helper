@@ -7,45 +7,60 @@ import (
 	"time"
 	"context"
 )
-type TcpClients []*TcpClientNode
-type TcpService struct {
-	Address string               // 监听ip
-	lock *sync.Mutex
-	statusLock *sync.Mutex
-	listener *net.Listener
-	wg *sync.WaitGroup
-	agents TcpClients
-	status int
-	conn *net.TCPConn
-	buffer []byte
-	ctx context.Context
-	index int64
-	onMessageCallback []OnServerEventFunc
-	codec ICodec
-}
-type OnServerEventFunc func(node *TcpClientNode, msgId int64, data []byte)
-type AgentServerOption func(s *TcpService)
 
-func SetOnServerMessage(f ...OnServerEventFunc) AgentServerOption {
+type TcpService struct {
+	Address           string
+	lock              *sync.Mutex
+	statusLock        *sync.Mutex
+	listener          *net.Listener
+	wg                *sync.WaitGroup
+	clients           TcpClients
+	status            int
+	conn              *net.TCPConn
+	buffer            []byte
+	ctx               context.Context
+	onMessageCallback []OnServerMessageFunc
+	codec             ICodec
+}
+type TcpClients          []*TcpClientNode
+type OnServerMessageFunc func(node *TcpClientNode, msgId int64, data []byte)
+type ServerOption        func(s *TcpService)
+
+// set receive msg callback func
+func SetOnServerMessage(f ...OnServerMessageFunc) ServerOption {
 	return func(s *TcpService) {
 		s.onMessageCallback = append(s.onMessageCallback, f...)
 	}
 }
 
-func NewAgentServer(ctx context.Context, address string, opts ...AgentServerOption) *TcpService {
+// set codec, codes use for encode and descode msg
+// codec must implement from ICodec
+func SetServerCodec(codec ICodec) ServerOption {
+	return func(s *TcpService) {
+		s.codec = codec
+	}
+}
+
+// new a tcp server
+// ctx like content.Background
+// address like 127.0.0.1:7770
+// opts like
+// tcp.SetOnServerMessage(func(node *tcp.TcpClientNode, msgId int64, data []byte) {
+//		node.Send(msgId, data)
+// })
+func NewAgentServer(ctx context.Context, address string, opts ...ServerOption) *TcpService {
 	tcp := &TcpService{
-		ctx:              ctx,
-		Address:          address,
-		lock:             new(sync.Mutex),
-		statusLock:       new(sync.Mutex),
-		wg:               new(sync.WaitGroup),
-		listener:         nil,
-		agents:           nil,
-		status:           0,
-		buffer:           make([]byte, 0),
-		index:            0,
-		onMessageCallback:   make([]OnServerEventFunc, 0),
-		codec:            &Codec{},
+		ctx:               ctx,
+		Address:           address,
+		lock:              new(sync.Mutex),
+		statusLock:        new(sync.Mutex),
+		wg:                new(sync.WaitGroup),
+		listener:          nil,
+		clients:           make(TcpClients, 0),
+		status:            0,
+		buffer:            make([]byte, 0),
+		onMessageCallback: make([]OnServerMessageFunc, 0),
+		codec:             &Codec{},
 	}
 	go tcp.keepalive()
 	for _, f := range opts {
@@ -54,15 +69,16 @@ func NewAgentServer(ctx context.Context, address string, opts ...AgentServerOpti
 	return tcp
 }
 
+// start tcp service
 func (tcp *TcpService) Start() {
 	go func() {
 		listen, err := net.Listen("tcp", tcp.Address)
 		if err != nil {
-			log.Errorf("tcp service listen with error: %+v", err)
+			log.Panicf("tcp service listen with error: %+v", err)
 			return
 		}
 		tcp.listener = &listen
-		log.Infof("agent service start with: %s", tcp.Address)
+		log.Infof("tcp service start with: %s", tcp.Address)
 		for {
 			conn, err := listen.Accept()
 			select {
@@ -78,54 +94,47 @@ func (tcp *TcpService) Start() {
 					tcp.ctx,
 					&conn,
 					tcp.codec,
-					NodeClose(func(n *TcpClientNode) {
+					setOnNodeClose(func(n *TcpClientNode) {
 						tcp.lock.Lock()
-						tcp.agents.remove(n)
+						tcp.clients.remove(n)
 						tcp.lock.Unlock()
 					}),
-				    setOnServerEvents(tcp.onMessageCallback...),
+				setOnMessage(tcp.onMessageCallback...),
 				)
 			tcp.lock.Lock()
-			tcp.agents.append(node)
+			tcp.clients.append(node)
 			tcp.lock.Unlock()
 			go node.readMessage()
 		}
 	}()
 }
 
-func (tcp *TcpService) Broadcast(data []byte) {
-	l := int64(len(tcp.agents))
-	if l <= 0 {
-		return
-	}
-	for _, client := range tcp.agents {
-		client.AsyncSend(data)
+// Broadcast data to all connected clients
+func (tcp *TcpService) Broadcast(msgId int64, data []byte) {
+	for _, client := range tcp.clients {
+		client.AsyncSend(msgId, data)
 	}
 }
 
+// close service
 func (tcp *TcpService) Close() {
 	log.Debugf("tcp service closing, waiting for buffer send complete.")
 	if tcp.listener != nil {
 		(*tcp.listener).Close()
 	}
-	tcp.agents.close()
+	tcp.clients.close()
 	log.Debugf("tcp service closed.")
 }
 
-// 心跳
+// keepalive
 func (tcp *TcpService) keepalive() {
-	keepalive := tcp.codec.Encode(1, []byte("keepalive response ok"))
 	for {
 		select {
 		case <-tcp.ctx.Done():
 			return
 		default:
 		}
-		if tcp.agents == nil {
-			time.Sleep(time.Second * 3)
-			continue
-		}
-		tcp.agents.asyncSend(keepalive)
+		tcp.clients.asyncSend(1, []byte{byte(0)})
 		time.Sleep(time.Second * 3)
 	}
 }
