@@ -19,8 +19,8 @@ var (
  	UnknownError = errors.New("unknown error")
 )
 const (
-	statusConnect = 1 << iota
-	MaxInt64 = int64(1)<<62
+	statusConnect     = 1 << iota
+	MaxInt64          = int64(1) << 62
 	asyncWriteChanLen = 10000
 )
 
@@ -29,16 +29,14 @@ type Client struct {
 	buffer            []byte
 	bufferSize        int
 	conn              net.Conn
-	connLock          *sync.Mutex
-	statusLock        *sync.Mutex
 	status            int
 	onMessageCallback []OnClientEventFunc
 	asyncWriteChan    chan []byte
 	coder             ICodec
-	onConnect         OnConnectFunc
 	msgId             int64
 	waiter            map[int64] *waiter
 	waiterLock        *sync.RWMutex
+	waiterGlobalTimeout int64 //毫秒
 }
 
 type waiter struct {
@@ -87,15 +85,19 @@ func SetCoder(coder ICodec) ClientOption {
 	}
 }
 
+// 设置缓冲区大小
 func SetBufferSize(size int) ClientOption {
 	return func(tcp *Client) {
 		tcp.bufferSize = size
 	}
 }
 
-func SetOnConnect(onCnnect OnConnectFunc) ClientOption {
+// 单位是毫秒
+// 设置waiter检测的超时时间，默认为6000毫秒
+// 如果超过该时间，waiter就会被删除
+func SetWaiterGlobalTimeout(timeout int64) ClientOption {
 	return func(tcp *Client) {
-		tcp.onConnect = onCnnect
+		tcp.waiterGlobalTimeout = timeout
 	}
 }
 
@@ -103,17 +105,16 @@ func NewClient(ctx context.Context, opts ...ClientOption) *Client {
 	c := &Client{
 		buffer:            make([]byte, 0),
 		conn:              nil,
-		statusLock:        new(sync.Mutex),
 		status:            0,
 		onMessageCallback: make([]OnClientEventFunc, 0),
 		asyncWriteChan:    make(chan []byte, asyncWriteChanLen),
-		connLock:          new(sync.Mutex),
 		ctx:               ctx,
 		coder:             &Codec{},
 		bufferSize:        4096,
 		msgId:             1,
 		waiter:            make(map[int64]*waiter),
 		waiterLock:        new(sync.RWMutex),
+		waiterGlobalTimeout: 6000,
 	}
 	for _, f := range opts {
 		f(c)
@@ -163,13 +164,6 @@ func (tcp *Client) Send(data []byte) (*waiter, error) {
 }
 
 func (tcp *Client) keep() {
-	c := make(chan struct{})
-	go func() {
-		for {
-			c <- struct{}{}
-			time.Sleep(time.Second * 3)
-		}
-	}()
 	go func() {
 		for {
 			tcp.Send([]byte(""))
@@ -194,19 +188,18 @@ func (tcp *Client) keep() {
 	}()
 
 	for {
-		select {
-		case <- c :
-			tcp.waiterLock.Lock()
-			for msgId, v := range tcp.waiter  {
-				// check timeout
-				if int64(time.Now().UnixNano() / 1000000) - v.time >= 6000 {
-					log.Warnf("msgid %v is timeout, will delete", msgId)
-					close(v.data)
-					delete(tcp.waiter, msgId)
-				}
+		current := int64(time.Now().UnixNano() / 1000000)
+		tcp.waiterLock.Lock()
+		for msgId, v := range tcp.waiter  {
+			// check timeout
+			if current - v.time >= tcp.waiterGlobalTimeout {
+				log.Warnf("msgid %v is timeout, will delete", msgId)
+				close(v.data)
+				delete(tcp.waiter, msgId)
 			}
-			tcp.waiterLock.Unlock()
 		}
+		tcp.waiterLock.Unlock()
+		time.Sleep(time.Second * 3)
 	}
 }
 
@@ -248,9 +241,6 @@ func (tcp *Client) Connect(address string, timeout time.Duration) error {
 		tcp.status |= statusConnect
 	}
 	tcp.conn = conn
-	if tcp.onConnect != nil {
-		tcp.onConnect(tcp)
-	}
 	return nil
 }
 
@@ -281,7 +271,6 @@ func (tcp *Client) onMessage(msg []byte) {
 		}
 		// 1 is system id
 		if msgId > 1 {
-
 			tcp.waiterLock.RLock()
 			w, ok := tcp.waiter[msgId]
 			tcp.waiterLock.RUnlock()
