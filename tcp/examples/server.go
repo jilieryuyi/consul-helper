@@ -9,7 +9,7 @@ import (
 )
 func main() {
 	address := "127.0.0.1:7770"
-	server  := tcp.NewAgentServer(context.Background(), address, tcp.SetOnServerMessage(func(node *tcp.TcpClientNode, msgId int64, data []byte) {
+	server  := tcp.NewServer(context.Background(), address, tcp.SetOnServerMessage(func(node *tcp.TcpClientNode, msgId int64, data []byte) {
 		node.Send(msgId, data)
 	}))
 	server.Start()

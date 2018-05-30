@@ -48,7 +48,7 @@ func SetServerCodec(codec ICodec) ServerOption {
 // tcp.SetOnServerMessage(func(node *tcp.TcpClientNode, msgId int64, data []byte) {
 //		node.Send(msgId, data)
 // })
-func NewAgentServer(ctx context.Context, address string, opts ...ServerOption) *TcpService {
+func NewServer(ctx context.Context, address string, opts ...ServerOption) *TcpService {
 	tcp := &TcpService{
 		ctx:               ctx,
 		Address:           address,
