@@ -1,0 +1,2 @@
+nohup: ./server.go: Permission denied
+time="2018-05-31T07:03:48+08:00" level=info msg="tcp service start with: 127.0.0.1:7770"

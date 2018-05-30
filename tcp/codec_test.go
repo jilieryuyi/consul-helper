@@ -13,6 +13,20 @@ func TestCodec_Encode(t *testing.T) {
 	codec := &Codec{}
 	cc := codec.Encode(msgId, data)
 
+	mid, c, p, err := codec.Decode(cc)
+	fmt.Println(mid, c, p, err)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	if mid != msgId {
+		t.Error("error")
+	}
+
+	if !bytes.Equal(c, data) {
+		t.Error("error 2")
+	}
+
+
 	content := make([]byte, 0)
 	content = append(content, []byte("你好")...)
 	content = append(content, cc...)
@@ -20,7 +34,7 @@ func TestCodec_Encode(t *testing.T) {
 	content = append(content, cc...)
 	content = append(content, []byte("qwrqwerfq34wfq")...)
 
-	mid, c, p, err := codec.Decode(content)
+	mid, c, p, err = codec.Decode(content)
 	fmt.Println(mid, c, p, err)
 	if err != nil {
 		t.Errorf(err.Error())
