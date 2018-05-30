@@ -22,6 +22,7 @@ func TestNewServer(t *testing.T) {
 		dial := net.Dialer{Timeout: time.Second * 3}
 		conn, _ := dial.Dial("tcp", address)
 		for {
+			// 这里发送一堆干扰数据包
 			conn.Write([]byte("你好曲儿个人感情如"))
 		}
 	}()
