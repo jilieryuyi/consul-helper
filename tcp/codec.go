@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/sirupsen/logrus"
 	"bytes"
-	"fmt"
 )
 
 const (
@@ -49,11 +48,9 @@ func (c Codec) Encode(msgId int64, msg []byte) []byte {
 // 这里的第一个返回值是解包之后的实际报内容
 // 第二个返回值是读取了的包长度
 func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
-	fmt.Println(data)
 	if data == nil || len(data) == 0 {
 		return 0, nil, 0, nil
 	}
-
 	startPos := 4
 	header := []byte{255, 255, 255, 255}
 	if !bytes.Equal(data[:4], header) {
@@ -73,25 +70,16 @@ func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
 		return 0, nil, 0, nil
 	}
 
-	fmt.Println("start pos", startPos)
-	//header  := data[:4]
-	//fmt.Println(header)
-	fmt.Println(data[startPos:startPos+4])
 	clen := int(binary.LittleEndian.Uint32(data[startPos:startPos+4]))
-	fmt.Println("content len = ", clen)
 	if clen < ContentMinLen {
 		return 0, nil, 0, DataLenError
 	}
 	if len(data) < clen + 8 {
 		return 0, nil, 0, nil
 	}
-	fmt.Println("msgid ", data[startPos+4:startPos+12])
 	msgId := int64(binary.LittleEndian.Uint64(data[startPos+4:startPos+12]))
-	fmt.Println("msgid = ", msgId)
 	content := make([]byte, len(data[startPos+12 : startPos + clen + 4 ]))
 	copy(content, data[startPos+12 : startPos + clen + 4])
-	fmt.Println(string(content))
-
 	return int64(msgId), content, startPos + clen + 4, nil
 }
 
