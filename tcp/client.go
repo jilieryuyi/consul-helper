@@ -39,8 +39,6 @@ type Client struct {
 	msgId             int64
 	waiter            map[int64] *waiter
 	waiterLock        *sync.RWMutex
-	resChan           chan *res
-	delwaiter         chan int64
 }
 
 type waiter struct {
@@ -50,14 +48,9 @@ type waiter struct {
 }
 
 type waiterData struct {
-	delwaiter chan int64
+	delWaiter func(int64)
 	data []byte
 	msgId int64
-}
-
-type res struct {
-	MsgId int64
-	Data []byte
 }
 
 func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
@@ -67,7 +60,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
 		if !ok {
 			return nil, ChanIsClosed
 		}
-		data.delwaiter <- data.msgId
+		data.delWaiter(data.msgId)
 		return data.data, nil
 	case <- a:
 		return nil, WaitTimeout
@@ -120,8 +113,6 @@ func NewClient(ctx context.Context, opts ...ClientOption) *Client {
 		bufferSize:        4096,
 		msgId:             1,
 		waiter:            make(map[int64]*waiter),
-		resChan:           make(chan *res, 10000),
-		delwaiter:         make(chan int64, 10000),
 		waiterLock:        new(sync.RWMutex),
 	}
 	for _, f := range opts {
@@ -130,6 +121,16 @@ func NewClient(ctx context.Context, opts ...ClientOption) *Client {
 	go c.keep()
 	go c.readMessage()
 	return c
+}
+
+func (tcp *Client) delWaiter(msgId int64) {
+	tcp.waiterLock.Lock()
+	w, ok := tcp.waiter[msgId]
+	if ok {
+		close(w.data)
+		delete(tcp.waiter, msgId)
+	}
+	tcp.waiterLock.Unlock()
 }
 
 func (tcp *Client) AsyncSend(data []byte) {
@@ -203,29 +204,6 @@ func (tcp *Client) keep() {
 					close(v.data)
 					delete(tcp.waiter, msgId)
 				}
-			}
-			tcp.waiterLock.Unlock()
-		case res, ok := <- tcp.resChan:
-			if !ok {
-				return
-			}
-			tcp.waiterLock.RLock()
-			w, ok := tcp.waiter[res.MsgId]
-			tcp.waiterLock.RUnlock()
-			if ok {
-				w.data <- &waiterData{tcp.delwaiter, res.Data, res.MsgId}
-			} else {
-				log.Warnf("warning: %v waiter does not exists", res.MsgId)
-			}
-		case msgId, ok := <- tcp.delwaiter:
-			if !ok {
-				return
-			}
-			tcp.waiterLock.Lock()
-			w, ok:=tcp.waiter[msgId]
-			if ok {
-				close(w.data)
-				delete(tcp.waiter, msgId)
 			}
 			tcp.waiterLock.Unlock()
 		}
@@ -303,7 +281,16 @@ func (tcp *Client) onMessage(msg []byte) {
 		}
 		// 1 is system id
 		if msgId > 1 {
-			tcp.resChan <- &res{MsgId: msgId, Data: content}
+
+			tcp.waiterLock.RLock()
+			w, ok := tcp.waiter[msgId]
+			tcp.waiterLock.RUnlock()
+			if ok {
+				w.data <- &waiterData{tcp.delWaiter, content, msgId}
+			} else {
+				log.Warnf("warning: %v waiter does not exists", msgId)
+			}
+
 		}
 		for _, f := range tcp.onMessageCallback {
 			f(tcp, content)
