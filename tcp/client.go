@@ -60,12 +60,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
 		if !ok {
 			return nil, ChanIsClosed
 		}
-
-		//data := make([]byte, 8 + len(content))
 		msgId := int64(binary.LittleEndian.Uint64(data[:8]))
-		//copy(data[8:], content)
-		//content := data[8:]
-
 		w.delWaiter(msgId)
 		return data[8:], nil
 	case <- a:
@@ -290,7 +285,7 @@ func (tcp *Client) onMessage(msg []byte) {
 			w, ok := tcp.waiter[msgId]
 			tcp.waiterLock.RUnlock()
 			if ok {
-				w.data <- data//&waiterData{content, msgId}
+				w.data <- data
 			} else {
 				log.Warnf("warning: %v waiter does not exists", msgId)
 			}
