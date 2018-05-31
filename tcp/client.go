@@ -26,32 +26,26 @@ const (
 )
 
 type Client struct {
-	ctx               context.Context
-	buffer            []byte
-	bufferSize        int
-	conn              net.Conn
-	status            int
-	onMessageCallback []OnClientEventFunc
-	asyncWriteChan    chan []byte
-	coder             ICodec
-	msgId             int64
-	waiter            map[int64] *waiter
-	waiterLock        *sync.RWMutex
+	ctx                 context.Context
+	buffer              []byte
+	bufferSize          int
+	conn                net.Conn
+	status              int
+	onMessageCallback   []OnClientEventFunc
+	asyncWriteChan      chan []byte
+	coder               ICodec
+	msgId               int64
+	waiter              map[int64] *waiter
+	waiterLock          *sync.RWMutex
 	waiterGlobalTimeout int64 //毫秒
 }
 
 type waiter struct {
-	msgId int64
-	data chan []byte//*waiterData
-	time int64
+	msgId     int64
+	data      chan []byte
+	time      int64
 	delWaiter func(int64)
 }
-
-//type waiterData struct {
-//	//delWaiter func(int64)
-//	data []byte
-//	msgId int64
-//}
 
 func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
 	a := time.After(timeout)
@@ -276,11 +270,9 @@ func (tcp *Client) onMessage(msg []byte) {
 		}
 		// 1 is system id
 		if msgId > 1 {
-
 			data := make([]byte, 8 + len(content))
 			binary.LittleEndian.PutUint64(data[:8], uint64(msgId))
 			copy(data[8:], content)
-
 			tcp.waiterLock.RLock()
 			w, ok := tcp.waiter[msgId]
 			tcp.waiterLock.RUnlock()
@@ -289,7 +281,6 @@ func (tcp *Client) onMessage(msg []byte) {
 			} else {
 				log.Warnf("warning: %v waiter does not exists", msgId)
 			}
-
 		}
 		for _, f := range tcp.onMessageCallback {
 			f(tcp, content)
