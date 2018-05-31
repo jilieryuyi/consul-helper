@@ -3,23 +3,23 @@ package tcp
 import 	log "github.com/sirupsen/logrus"
 
 
-func (c *TcpClients) append(node *TcpClientNode) {
+func (c *Clients) append(node *ClientNode) {
 	*c = append(*c, node)
 }
 
-func (c *TcpClients) send(msgId int64, data []byte) {
+func (c *Clients) send(msgId int64, data []byte) {
 	for _, node := range *c {
 		node.Send(msgId, data)
 	}
 }
 
-func (c *TcpClients) asyncSend(msgId int64, data []byte) {
+func (c *Clients) asyncSend(msgId int64, data []byte) {
 	for _, node := range *c {
 		node.AsyncSend(msgId, data)
 	}
 }
 
-func (c *TcpClients) remove(node *TcpClientNode) {
+func (c *Clients) remove(node *ClientNode) {
 	for index, n := range *c {
 		if n == node {
 			*c = append((*c)[:index], (*c)[index+1:]...)
@@ -29,7 +29,7 @@ func (c *TcpClients) remove(node *TcpClientNode) {
 	log.Debugf("#####################remove node, current len %v", len(*c))
 }
 
-func (c *TcpClients) close() {
+func (c *Clients) close() {
 	for _, node := range *c {
 		node.close()
 	}

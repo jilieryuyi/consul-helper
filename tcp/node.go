@@ -12,10 +12,10 @@ const (
 	tcpMaxSendQueue = 10000
 	tcpNodeOnline   = 1 << iota
 )
-type NodeFunc   func(n *TcpClientNode)
-type NodeOption func(n *TcpClientNode)
+type NodeFunc   func(n *ClientNode)
+type NodeOption func(n *ClientNode)
 
-type TcpClientNode struct {
+type ClientNode struct {
 	conn              *net.Conn
 	sendQueue         chan []byte
 	recvBuf           []byte
@@ -29,13 +29,13 @@ type TcpClientNode struct {
 }
 
 func setOnMessage(f ...OnServerMessageFunc) NodeOption {
-	return func(n *TcpClientNode) {
+	return func(n *ClientNode) {
 		n.onMessageCallback = append(n.onMessageCallback, f...)
 	}
 }
 
-func newNode(ctx context.Context, conn *net.Conn, codec ICodec, opts ...NodeOption) *TcpClientNode {
-	node := &TcpClientNode{
+func newNode(ctx context.Context, conn *net.Conn, codec ICodec, opts ...NodeOption) *ClientNode {
+	node := &ClientNode{
 		conn:              conn,
 		sendQueue:         make(chan []byte, tcpMaxSendQueue),
 		recvBuf:           make([]byte, 0),
@@ -55,12 +55,12 @@ func newNode(ctx context.Context, conn *net.Conn, codec ICodec, opts ...NodeOpti
 }
 
 func setOnNodeClose(f NodeFunc) NodeOption {
-	return func(n *TcpClientNode) {
+	return func(n *ClientNode) {
 		n.onclose = append(n.onclose, f)
 	}
 }
 
-func (node *TcpClientNode) close() {
+func (node *ClientNode) close() {
 	node.lock.Lock()
 	if node.status & tcpNodeOnline <= 0 {
 		node.lock.Unlock()
@@ -78,12 +78,12 @@ func (node *TcpClientNode) close() {
 	}
 }
 
-func (node *TcpClientNode) Send(msgId int64, data []byte) (int, error) {
+func (node *ClientNode) Send(msgId int64, data []byte) (int, error) {
 	sendData := node.codec.Encode(msgId, data)
 	return (*node.conn).Write(sendData)
 }
 
-func (node *TcpClientNode) AsyncSend(msgId int64, data []byte) {
+func (node *ClientNode) AsyncSend(msgId int64, data []byte) {
 	if node.status & tcpNodeOnline <= 0 {
 		return
 	}
@@ -91,7 +91,7 @@ func (node *TcpClientNode) AsyncSend(msgId int64, data []byte) {
 	node.sendQueue <- senddata
 }
 
-func (node *TcpClientNode) asyncSendService() {
+func (node *ClientNode) asyncSendService() {
 	node.wg.Add(1)
 	defer node.wg.Done()
 	for {
@@ -124,7 +124,7 @@ func (node *TcpClientNode) asyncSendService() {
 	}
 }
 
-func (node *TcpClientNode) onMessage(msg []byte) {
+func (node *ClientNode) onMessage(msg []byte) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Errorf("Unpack recover##########%+v, %+v", err, node.recvBuf)
@@ -155,7 +155,7 @@ func (node *TcpClientNode) onMessage(msg []byte) {
 	}
 }
 
-func (node *TcpClientNode) readMessage() {
+func (node *ClientNode) readMessage() {
 	for {
 		readBuffer := make([]byte, 4096)
 		size, err := (*node.conn).Read(readBuffer)

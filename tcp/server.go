@@ -14,7 +14,7 @@ type Server struct {
 	statusLock        *sync.Mutex
 	listener          *net.Listener
 	wg                *sync.WaitGroup
-	clients           TcpClients
+	clients           Clients
 	status            int
 	conn              *net.TCPConn
 	buffer            []byte
@@ -22,8 +22,8 @@ type Server struct {
 	onMessageCallback []OnServerMessageFunc
 	codec             ICodec
 }
-type TcpClients          []*TcpClientNode
-type OnServerMessageFunc func(node *TcpClientNode, msgId int64, data []byte)
+type Clients             []*ClientNode
+type OnServerMessageFunc func(node *ClientNode, msgId int64, data []byte)
 type ServerOption        func(s *Server)
 
 // set receive msg callback func
@@ -45,7 +45,7 @@ func SetServerCodec(codec ICodec) ServerOption {
 // ctx like content.Background
 // address like 127.0.0.1:7770
 // opts like
-// tcp.SetOnServerMessage(func(node *tcp.TcpClientNode, msgId int64, data []byte) {
+// tcp.SetOnServerMessage(func(node *tcp.ClientNode, msgId int64, data []byte) {
 //		node.Send(msgId, data)
 // })
 func NewServer(ctx context.Context, address string, opts ...ServerOption) *Server {
@@ -56,7 +56,7 @@ func NewServer(ctx context.Context, address string, opts ...ServerOption) *Serve
 		statusLock:        new(sync.Mutex),
 		wg:                new(sync.WaitGroup),
 		listener:          nil,
-		clients:           make(TcpClients, 0),
+		clients:           make(Clients, 0),
 		status:            0,
 		buffer:            make([]byte, 0),
 		onMessageCallback: make([]OnServerMessageFunc, 0),
@@ -94,7 +94,7 @@ func (tcp *Server) Start() {
 					tcp.ctx,
 					&conn,
 					tcp.codec,
-					setOnNodeClose(func(n *TcpClientNode) {
+					setOnNodeClose(func(n *ClientNode) {
 						tcp.lock.Lock()
 						tcp.clients.remove(n)
 						tcp.lock.Unlock()
