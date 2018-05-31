@@ -8,7 +8,7 @@ import (
 	"context"
 )
 
-type TcpService struct {
+type Server struct {
 	Address           string
 	lock              *sync.Mutex
 	statusLock        *sync.Mutex
@@ -24,11 +24,11 @@ type TcpService struct {
 }
 type TcpClients          []*TcpClientNode
 type OnServerMessageFunc func(node *TcpClientNode, msgId int64, data []byte)
-type ServerOption        func(s *TcpService)
+type ServerOption        func(s *Server)
 
 // set receive msg callback func
 func SetOnServerMessage(f ...OnServerMessageFunc) ServerOption {
-	return func(s *TcpService) {
+	return func(s *Server) {
 		s.onMessageCallback = append(s.onMessageCallback, f...)
 	}
 }
@@ -36,7 +36,7 @@ func SetOnServerMessage(f ...OnServerMessageFunc) ServerOption {
 // set codec, codes use for encode and descode msg
 // codec must implement from ICodec
 func SetServerCodec(codec ICodec) ServerOption {
-	return func(s *TcpService) {
+	return func(s *Server) {
 		s.codec = codec
 	}
 }
@@ -48,8 +48,8 @@ func SetServerCodec(codec ICodec) ServerOption {
 // tcp.SetOnServerMessage(func(node *tcp.TcpClientNode, msgId int64, data []byte) {
 //		node.Send(msgId, data)
 // })
-func NewServer(ctx context.Context, address string, opts ...ServerOption) *TcpService {
-	tcp := &TcpService{
+func NewServer(ctx context.Context, address string, opts ...ServerOption) *Server {
+	tcp := &Server{
 		ctx:               ctx,
 		Address:           address,
 		lock:              new(sync.Mutex),
@@ -70,7 +70,7 @@ func NewServer(ctx context.Context, address string, opts ...ServerOption) *TcpSe
 }
 
 // start tcp service
-func (tcp *TcpService) Start() {
+func (tcp *Server) Start() {
 	go func() {
 		listen, err := net.Listen("tcp", tcp.Address)
 		if err != nil {
@@ -110,14 +110,14 @@ func (tcp *TcpService) Start() {
 }
 
 // Broadcast data to all connected clients
-func (tcp *TcpService) Broadcast(msgId int64, data []byte) {
+func (tcp *Server) Broadcast(msgId int64, data []byte) {
 	for _, client := range tcp.clients {
 		client.AsyncSend(msgId, data)
 	}
 }
 
 // close service
-func (tcp *TcpService) Close() {
+func (tcp *Server) Close() {
 	log.Debugf("tcp service closing, waiting for buffer send complete.")
 	if tcp.listener != nil {
 		(*tcp.listener).Close()
@@ -127,7 +127,7 @@ func (tcp *TcpService) Close() {
 }
 
 // keepalive
-func (tcp *TcpService) keepalive() {
+func (tcp *Server) keepalive() {
 	for {
 		select {
 		case <-tcp.ctx.Done():
