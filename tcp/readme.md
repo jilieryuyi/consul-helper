@@ -1,4 +1,4 @@
-tcp tools
+the easy way to use go tcp
 
 demo server
 ````
