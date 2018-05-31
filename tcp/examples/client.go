@@ -16,7 +16,7 @@ func main() {
 	// go run server.go
 	// 在运行client端
 	// go run client
-	address := "127.0.0.1:7770"
+	address := "127.0.0.1:7771"
 	client  := tcp.NewClient(context.Background())
 	err     := client.Connect(address, time.Second * 3)
 
@@ -39,7 +39,7 @@ func main() {
 
 		//下载文件 http://localhost:8880/debug/pprof/profile
 		//分析 go tool pprof -web /Users/yuyi/Downloads/profile
-		http.ListenAndServe("127.0.0.1:8881", nil)
+		http.ListenAndServe("127.0.0.1:7773", nil)
 	}()
 
 	start := time.Now()

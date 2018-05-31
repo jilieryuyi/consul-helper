@@ -10,7 +10,7 @@ import (
 	_ "net/http/pprof"
 )
 func main() {
-	address := "127.0.0.1:7770"
+	address := "127.0.0.1:7771"
 	server  := tcp.NewServer(context.Background(), address, tcp.SetOnServerMessage(func(node *tcp.TcpClientNode, msgId int64, data []byte) {
 		node.Send(msgId, data)
 	}))
@@ -31,7 +31,7 @@ func main() {
 
 		//下载文件 http://localhost:8880/debug/pprof/profile
 		//分析 go tool pprof -web /Users/yuyi/Downloads/profile
-		http.ListenAndServe("127.0.0.1:8880", nil)
+		http.ListenAndServe("127.0.0.1:7772", nil)
 	}()
 
 	sc := make(chan os.Signal, 1)

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"fmt"
+	"encoding/binary"
 )
 
 var (
@@ -41,15 +42,16 @@ type Client struct {
 
 type waiter struct {
 	msgId int64
-	data chan *waiterData
+	data chan []byte//*waiterData
 	time int64
+	delWaiter func(int64)
 }
 
-type waiterData struct {
-	delWaiter func(int64)
-	data []byte
-	msgId int64
-}
+//type waiterData struct {
+//	//delWaiter func(int64)
+//	data []byte
+//	msgId int64
+//}
 
 func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
 	a := time.After(timeout)
@@ -58,8 +60,14 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
 		if !ok {
 			return nil, ChanIsClosed
 		}
-		data.delWaiter(data.msgId)
-		return data.data, nil
+
+		//data := make([]byte, 8 + len(content))
+		msgId := int64(binary.LittleEndian.Uint64(data[:8]))
+		//copy(data[8:], content)
+		//content := data[8:]
+
+		w.delWaiter(msgId)
+		return data[8:], nil
 	case <- a:
 		return nil, WaitTimeout
 	}
@@ -150,8 +158,9 @@ func (tcp *Client) Send(data []byte) (*waiter, error) {
 	}
 	wai := &waiter{
 		msgId: msgId,
-		data:  make(chan *waiterData, 1),
+		data:  make(chan []byte, 1),
 		time:  int64(time.Now().UnixNano() / 1000000),
+		delWaiter: tcp.delWaiter,
 	}
 	fmt.Println("add waiter ", wai.msgId)
 	tcp.waiterLock.Lock()
@@ -272,11 +281,16 @@ func (tcp *Client) onMessage(msg []byte) {
 		}
 		// 1 is system id
 		if msgId > 1 {
+
+			data := make([]byte, 8 + len(content))
+			binary.LittleEndian.PutUint64(data[:8], uint64(msgId))
+			copy(data[8:], content)
+
 			tcp.waiterLock.RLock()
 			w, ok := tcp.waiter[msgId]
 			tcp.waiterLock.RUnlock()
 			if ok {
-				w.data <- &waiterData{tcp.delWaiter, content, msgId}
+				w.data <- data//&waiterData{content, msgId}
 			} else {
 				log.Warnf("warning: %v waiter does not exists", msgId)
 			}
