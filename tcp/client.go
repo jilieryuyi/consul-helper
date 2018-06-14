@@ -282,8 +282,13 @@ func (tcp *Client) onMessage(msg []byte) {
 				log.Warnf("warning: %v waiter does not exists", msgId)
 			}
 		}
-		for _, f := range tcp.onMessageCallback {
-			f(tcp, content)
+
+		// 判断是否是心跳包，心跳包不触发回调函数
+		isKeepalivePackage := len(content) == 1 && content[0] == byte(0)
+		if !isKeepalivePackage {
+			for _, f := range tcp.onMessageCallback {
+				f(tcp, content)
+			}
 		}
 	}
 }
