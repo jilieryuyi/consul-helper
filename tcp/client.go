@@ -135,9 +135,9 @@ func (tcp *Client) AsyncSend(data []byte) {
 	tcp.asyncWriteChan <- data
 }
 
-func (tcp *Client) Send(data []byte) (*waiter, error) {
+func (tcp *Client) Send(data []byte) (*waiter, int, error) {
 	if tcp.status & statusConnect <= 0 {
-		return nil, NotConnect
+		return nil, 0, NotConnect
 	}
 	msgId   := atomic.AddInt64(&tcp.msgId, 1)
 	// check max msgId
@@ -157,8 +157,8 @@ func (tcp *Client) Send(data []byte) (*waiter, error) {
 	tcp.waiterLock.Unlock()
 
 	sendMsg := tcp.coder.Encode(msgId, data)
-	_, err  := tcp.conn.Write(sendMsg)
-	return wai, err
+	num, err  := tcp.conn.Write(sendMsg)
+	return wai, num, err
 }
 
 func (tcp *Client) keep() {
@@ -177,7 +177,7 @@ func (tcp *Client) keep() {
 				if !ok {
 					return
 				}
-				_, err := tcp.Send(sendData)
+				_, _, err := tcp.Send(sendData)
 				if err != nil {
 					log.Errorf("send failure: %+v", err)
 				}
