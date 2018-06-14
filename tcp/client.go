@@ -162,6 +162,23 @@ func (tcp *Client) Send(data []byte) (*waiter, int, error) {
 	return wai, num, err
 }
 
+// write api 与 send api的差别在于 send 支持同步wait等待服务端响应
+// write 则不支持
+func (tcp *Client) Write(data []byte) (int, error) {
+	if tcp.status & statusConnect <= 0 {
+		return 0, NotConnect
+	}
+	msgId   := atomic.AddInt64(&tcp.msgId, 1)
+	// check max msgId
+	if msgId > MaxInt64 {
+		atomic.StoreInt64(&tcp.msgId, 1)
+		msgId = atomic.AddInt64(&tcp.msgId, 1)
+	}
+	sendMsg := tcp.coder.Encode(msgId, data)
+	num, err  := tcp.conn.Write(sendMsg)
+	return num, err
+}
+
 func (tcp *Client) keep() {
 	go func() {
 		for {
