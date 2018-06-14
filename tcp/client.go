@@ -182,7 +182,7 @@ func (tcp *Client) Write(data []byte) (int, error) {
 func (tcp *Client) keep() {
 	go func() {
 		for {
-			tcp.Send([]byte(""))
+			tcp.Write([]byte(""))
 			time.Sleep(time.Second * 3)
 		}
 	}()
