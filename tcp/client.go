@@ -195,7 +195,7 @@ func (tcp *Client) keep() {
 				if !ok {
 					return
 				}
-				_, _, err := tcp.Send(sendData)
+				_, err := tcp.Write(sendData)
 				if err != nil {
 					log.Errorf("send failure: %+v", err)
 				}
