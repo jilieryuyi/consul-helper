@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"fmt"
 	"encoding/binary"
+	"bytes"
 )
 
 var (
@@ -284,8 +285,7 @@ func (tcp *Client) onMessage(msg []byte) {
 		}
 
 		// 判断是否是心跳包，心跳包不触发回调函数
-		isKeepalivePackage := len(content) == 1 && content[0] == byte(0)
-		if !isKeepalivePackage {
+		if !bytes.Equal(keepalivePackage, content) {
 			for _, f := range tcp.onMessageCallback {
 				f(tcp, content)
 			}

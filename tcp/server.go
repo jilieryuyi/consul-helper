@@ -25,6 +25,7 @@ type Server struct {
 type Clients             []*ClientNode
 type OnServerMessageFunc func(node *ClientNode, msgId int64, data []byte)
 type ServerOption        func(s *Server)
+var keepalivePackage     = []byte{byte(0)}
 
 // set receive msg callback func
 func SetOnServerMessage(f ...OnServerMessageFunc) ServerOption {
@@ -134,7 +135,7 @@ func (tcp *Server) keepalive() {
 			return
 		default:
 		}
-		tcp.clients.asyncSend(1, []byte{byte(0)})
+		tcp.clients.asyncSend(1, keepalivePackage)
 		time.Sleep(time.Second * 3)
 	}
 }
