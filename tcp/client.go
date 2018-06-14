@@ -296,9 +296,9 @@ func (tcp *Client) onMessage(msg []byte) {
 			tcp.waiterLock.RUnlock()
 			if ok {
 				w.data <- data
-			} else {
+			} /*else {
 				log.Warnf("warning: %v waiter does not exists", msgId)
-			}
+			}*/
 		}
 
 		// 判断是否是心跳包，心跳包不触发回调函数
