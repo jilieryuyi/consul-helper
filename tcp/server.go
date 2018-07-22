@@ -81,12 +81,12 @@ func (tcp *Server) Start() {
 		tcp.listener = &listen
 		log.Infof("tcp service start with: %s", tcp.Address)
 		for {
-			conn, err := listen.Accept()
 			select {
 			case <-tcp.ctx.Done():
 				return
 			default:
 			}
+			conn, err := listen.Accept()
 			if err != nil {
 				log.Warnf("tcp service accept with error: %+v", err)
 				continue
