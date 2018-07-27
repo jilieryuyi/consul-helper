@@ -8,6 +8,7 @@ import (
 	"fmt"
 	//"net"
 	"math/rand"
+	"github.com/sirupsen/logrus"
 )
 
 func RandString() string {
@@ -25,7 +26,11 @@ func RandString() string {
 func TestNewServer(t *testing.T) {
 	address := "127.0.0.1:7771"
 	server  := NewServer(context.Background(), address, SetOnServerMessage(func(node *ClientNode, msgId int64, data []byte) {
-		node.Send(msgId, data)
+		logrus.Infof("receive: msgId=%v, data=%v", msgId, string(data))
+		_, err := node.Send(msgId, data)
+		if err != nil {
+			logrus.Errorf("line 32: %v", err)
+		}
 	}))
 	server.Start()
 	defer server.Close()
@@ -42,25 +47,66 @@ func TestNewServer(t *testing.T) {
 
 
 	client  := NewClient(context.Background())
-	err     := client.Connect(address, time.Second * 3)
 
-	if err != nil {
-		t.Errorf("connect to %v error: %v", address, err)
-		return
-	}
-	defer client.Disconnect()
 	start := time.Now()
-	times := 100000
+	times := 10
 	for  i := 0; i < times; i++ {
+		err     := client.Connect(address, time.Second * 3)
+		if err != nil {
+			t.Errorf("connect to %v error: %v", address, err)
+			return
+		}
+		var res1 []byte
+		var res2 []byte
+		var res3 []byte
+
 		data1 := []byte(RandString())
 		data2 := []byte(RandString())
 		data3 := []byte(RandString())
-		w1, _, _ := client.Send(data1)
-		w2, _, _ := client.Send(data2)
-		w3, _, _ := client.Send(data3)
-		res1, _ := w1.Wait(time.Second * 3)
-		res2, _ := w2.Wait(time.Second * 3)
-		res3, _ := w3.Wait(time.Second * 3)
+		w1, _, err := client.Send(data1)
+		if err != nil || w1 == nil {
+			t.Errorf("%v", err)
+			return
+		}
+		w2, _, err := client.Send(data2)
+		if err != nil || w2 == nil {
+			t.Errorf("%v", err)
+			return
+		}
+		w3, _, err := client.Send(data3)
+		if err != nil || w3 == nil {
+			t.Errorf("%v", err)
+			return
+		}
+		if w1 != nil {
+			res1, err = w1.Wait(time.Second * 3)
+			if err != nil {
+				t.Errorf("%v", err)
+				return
+			}
+		}
+		if w2 != nil {
+			res2, err = w2.Wait(time.Second * 3)
+			if err != nil {
+				t.Errorf("%v", err)
+				return
+			}
+		}
+		if w3 != nil {
+			res3, err = w3.Wait(time.Second * 3)
+			if err != nil {
+				t.Errorf("%v", err)
+				return
+			}
+		}
+
+		logrus.Infof("data1 == %v", string(data1))
+		logrus.Infof("data2 == %v", string(data2))
+		logrus.Infof("data3 == %v", string(data3))
+
+		logrus.Infof("res1 == %v", string(res1))
+		logrus.Infof("res2 == %v", string(res2))
+		logrus.Infof("res3 == %v", string(res3))
 
 		if !bytes.Equal(data1, res1) || !bytes.Equal(data2, res2) || !bytes.Equal(data3, res3) {
 			t.Errorf("error")
@@ -69,6 +115,7 @@ func TestNewServer(t *testing.T) {
 		fmt.Println("w1 return: ", string(res1))
 		fmt.Println("w2 return: ", string(res2))
 		fmt.Println("w3 return: ", string(res3))
+		client.Disconnect()
 	}
 	fmt.Println("avg use time ", time.Since(start).Nanoseconds()/int64(times), "ns")
 }

@@ -39,6 +39,7 @@ type Client struct {
 	waiter              map[int64] *waiter
 	waiterLock          *sync.RWMutex
 	waiterGlobalTimeout int64 //毫秒
+	wg                  *sync.WaitGroup
 }
 
 type waiter struct {
@@ -49,18 +50,22 @@ type waiter struct {
 }
 
 func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
+	//log.Infof("%+v", *w)
 	a := time.After(timeout)
 	select {
-	case data ,ok := <- w.data:
+	case data, ok := <- w.data:
 		if !ok {
+			log.Errorf("msgId=%v data chan close", w.msgId)
 			return nil, ChanIsClosed
 		}
 		msgId := int64(binary.LittleEndian.Uint64(data[:8]))
 		w.delWaiter(msgId)
 		return data[8:], nil
 	case <- a:
+		log.Errorf("msgId=%v wait timeout", w.msgId)
 		return nil, WaitTimeout
 	}
+	log.Errorf("msgId=%v unknow error", w.msgId)
 	return nil, UnknownError
 }
 
@@ -113,6 +118,7 @@ func NewClient(ctx context.Context, opts ...ClientOption) *Client {
 		waiter:            make(map[int64]*waiter),
 		waiterLock:        new(sync.RWMutex),
 		waiterGlobalTimeout: 6000,
+		wg:                new(sync.WaitGroup),
 	}
 	for _, f := range opts {
 		f(c)
@@ -128,6 +134,7 @@ func (tcp *Client) delWaiter(msgId int64) {
 	if ok {
 		close(w.data)
 		delete(tcp.waiter, msgId)
+		tcp.wg.Done()
 	}
 	tcp.waiterLock.Unlock()
 }
@@ -156,6 +163,8 @@ func (tcp *Client) Send(data []byte) (*waiter, int, error) {
 	tcp.waiterLock.Lock()
 	tcp.waiter[wai.msgId] = wai
 	tcp.waiterLock.Unlock()
+
+	tcp.wg.Add(1)
 
 	sendMsg := tcp.coder.Encode(msgId, data)
 	num, err  := tcp.conn.Write(sendMsg)
@@ -212,6 +221,8 @@ func (tcp *Client) keep() {
 				log.Warnf("msgid %v is timeout, will delete", msgId)
 				close(v.data)
 				delete(tcp.waiter, msgId)
+				tcp.wg.Done()
+				//tcp.delWaiter(msgId)
 			}
 		}
 		tcp.waiterLock.Unlock()
@@ -233,6 +244,7 @@ func (tcp *Client) readMessage() {
 			tcp.Disconnect()
 			continue
 		}
+		log.Infof("reveive: %v", string(readBuffer[:size]))
 		tcp.onMessage(readBuffer[:size])
 		select {
 		case <-tcp.ctx.Done():
@@ -272,6 +284,7 @@ func (tcp *Client) onMessage(msg []byte) {
 	for {
 		bufferLen := len(tcp.buffer)
 		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
+		log.Infof("client receive: msgId=%v, data=%v", msgId, string(content))
 		if err != nil {
 			log.Errorf("%v", err)
 			tcp.buffer = make([]byte, 0)
@@ -295,6 +308,7 @@ func (tcp *Client) onMessage(msg []byte) {
 			w, ok := tcp.waiter[msgId]
 			tcp.waiterLock.RUnlock()
 			if ok {
+				log.Infof("write waiter: msgId=%v, data=%v", msgId, string(data))
 				w.data <- data
 			} /*else {
 				log.Warnf("warning: %v waiter does not exists", msgId)
@@ -311,6 +325,7 @@ func (tcp *Client) onMessage(msg []byte) {
 }
 
 func (tcp *Client) Disconnect() {
+	tcp.wg.Wait()
 	if tcp.status & statusConnect <= 0 {
 		return
 	}
