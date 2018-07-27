@@ -42,32 +42,8 @@ type Client struct {
 	wg                  *sync.WaitGroup
 }
 
-type waiter struct {
-	msgId     int64
-	data      chan []byte
-	time      int64
-	delWaiter func(int64)
-}
 
-func (w *waiter) Wait(timeout time.Duration) ([]byte, error) {
-	//log.Infof("%+v", *w)
-	a := time.After(timeout)
-	select {
-	case data, ok := <- w.data:
-		if !ok {
-			log.Errorf("msgId=%v data chan close", w.msgId)
-			return nil, ChanIsClosed
-		}
-		msgId := int64(binary.LittleEndian.Uint64(data[:8]))
-		w.delWaiter(msgId)
-		return data[8:], nil
-	case <- a:
-		log.Errorf("msgId=%v wait timeout", w.msgId)
-		return nil, WaitTimeout
-	}
-	log.Errorf("msgId=%v unknow error", w.msgId)
-	return nil, UnknownError
-}
+
 
 type ClientOption      func(tcp *Client)
 type OnClientEventFunc func(tcp *Client, content []byte)
@@ -157,7 +133,7 @@ func (tcp *Client) Send(data []byte) (*waiter, int, error) {
 		msgId: msgId,
 		data:  make(chan []byte, 1),
 		time:  int64(time.Now().UnixNano() / 1000000),
-		delWaiter: tcp.delWaiter,
+		onComplete: tcp.delWaiter,
 	}
 	fmt.Println("add waiter ", wai.msgId)
 	tcp.waiterLock.Lock()

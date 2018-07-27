@@ -49,7 +49,7 @@ func TestNewServer(t *testing.T) {
 	client  := NewClient(context.Background())
 
 	start := time.Now()
-	times := 10
+	times := 1
 	for  i := 0; i < times; i++ {
 		err     := client.Connect(address, time.Second * 3)
 		if err != nil {
@@ -79,21 +79,21 @@ func TestNewServer(t *testing.T) {
 			return
 		}
 		if w1 != nil {
-			res1, err = w1.Wait(time.Second * 3)
+			res1, _,err = w1.Wait(time.Second * 3)
 			if err != nil {
 				t.Errorf("%v", err)
 				return
 			}
 		}
 		if w2 != nil {
-			res2, err = w2.Wait(time.Second * 3)
+			res2, _, err = w2.Wait(time.Second * 3)
 			if err != nil {
 				t.Errorf("%v", err)
 				return
 			}
 		}
 		if w3 != nil {
-			res3, err = w3.Wait(time.Second * 3)
+			res3, _, err = w3.Wait(time.Second * 3)
 			if err != nil {
 				t.Errorf("%v", err)
 				return
