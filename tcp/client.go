@@ -151,7 +151,7 @@ func (tcp *Client) Send(data []byte) (*waiter, int, error) {
 		msgId = atomic.AddInt64(&globalMsgId, 1)
 	}
 	wai := newWaiter(msgId, tcp.delWaiter)
-	log.Infof("client.go Client::Send, add waiter, msgId=[%v]", wai.msgId)
+	log.Infof("client.go Client::Send, msgId=[%v], msg=[%v]", wai.msgId, string(data))
 	tcp.waiterLock.Lock()
 	tcp.waiter[wai.msgId] = wai
 	tcp.waiterLock.Unlock()

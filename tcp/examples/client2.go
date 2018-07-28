@@ -71,7 +71,7 @@ func main() {
 			fmt.Println("###################=>31")
 
 			if w1 != nil {
-				res1, _, err = w1.Wait(time.Second * 3)
+				res1, _, err = w1.Wait(0)
 				if err != nil {
 					errStr = err.Error()
 					logrus.Errorf("server_test.go TestNewClient %v", err)
