@@ -6,12 +6,12 @@ import (
 	"fmt"
 )
 
+// go test -v -test.run TestCodec_Encode
 func TestCodec_Encode(t *testing.T) {
 	msgId := int64(1)
-	data := []byte("hello")
-
+	data  := []byte("hello")
 	codec := &Codec{}
-	cc := codec.Encode(msgId, data)
+	cc    := codec.Encode(msgId, data)
 
 	mid, c, p, err := codec.Decode(cc)
 	fmt.Println(mid, c, p, err)
@@ -21,7 +21,6 @@ func TestCodec_Encode(t *testing.T) {
 	if mid != msgId {
 		t.Error("error")
 	}
-
 	if !bytes.Equal(c, data) {
 		t.Error("error 2")
 	}

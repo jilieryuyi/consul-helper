@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 	"bytes"
-	"fmt"
 	//"net"
 	"math/rand"
 	"github.com/sirupsen/logrus"
@@ -23,18 +22,25 @@ func RandString() string {
 	return string(result)
 }
 
+// go test -v -test.run TestNewServer
 func TestNewServer(t *testing.T) {
 	address := "127.0.0.1:7771"
 	server  := NewServer(context.Background(), address, SetOnServerMessage(func(node *ClientNode, msgId int64, data []byte) {
-		logrus.Infof("receive: msgId=%v, data=%v", msgId, string(data))
+		logrus.Infof("server_test.go TestNewServer receive: msgId=%v, data=%v", msgId, string(data))
 		_, err := node.Send(msgId, data)
 		if err != nil {
-			logrus.Errorf("line 32: %v", err)
+			logrus.Errorf("server_test.go TestNewServer line 32: %v", err)
 		}
 	}))
-	server.Start()
 	defer server.Close()
-	time.Sleep(time.Second)
+	server.Start()
+}
+
+// go test -v -test.run TestNewClient
+func TestNewClient(t *testing.T) {
+
+	address := "127.0.0.1:7771"
+
 
 	//go func() {
 	//	dial := net.Dialer{Timeout: time.Second * 3}
@@ -44,78 +50,100 @@ func TestNewServer(t *testing.T) {
 	//		conn.Write([]byte("你好曲儿个人感情如"))
 	//	}
 	//}()
-
-
-	client  := NewClient(context.Background())
-
-	start := time.Now()
-	times := 1
+	times := 10000
+	var res1 []byte
+	var data1 []byte
+	var client *Client
 	for  i := 0; i < times; i++ {
-		err     := client.Connect(address, time.Second * 3)
-		if err != nil {
-			t.Errorf("connect to %v error: %v", address, err)
-			return
-		}
-		var res1 []byte
-		var res2 []byte
-		var res3 []byte
-
-		data1 := []byte(RandString())
-		data2 := []byte(RandString())
-		data3 := []byte(RandString())
-		w1, _, err := client.Send(data1)
-		if err != nil || w1 == nil {
-			t.Errorf("%v", err)
-			return
-		}
-		w2, _, err := client.Send(data2)
-		if err != nil || w2 == nil {
-			t.Errorf("%v", err)
-			return
-		}
-		w3, _, err := client.Send(data3)
-		if err != nil || w3 == nil {
-			t.Errorf("%v", err)
-			return
-		}
-		if w1 != nil {
-			res1, _,err = w1.Wait(time.Second * 3)
-			if err != nil {
-				t.Errorf("%v", err)
-				return
+		client  = NewClient(context.Background(), address, SetClientConnectTimeout(time.Second * 3))
+		errHappend := false
+		for {
+			data1 = []byte(RandString())
+			if len(data1) <= 0 {
+				break
 			}
-		}
-		if w2 != nil {
-			res2, _, err = w2.Wait(time.Second * 3)
-			if err != nil {
-				t.Errorf("%v", err)
-				return
+			w1, _, err := client.Send(data1)
+			if err != nil || w1 == nil {
+				t.Errorf("server_test.go TestNewClient  %v", err)
+				errHappend = true
+				break
 			}
-		}
-		if w3 != nil {
-			res3, _, err = w3.Wait(time.Second * 3)
-			if err != nil {
-				t.Errorf("%v", err)
-				return
+			if w1 != nil {
+				res1, _, err = w1.Wait(time.Second * 3)
+				if err != nil {
+					t.Errorf("server_test.go TestNewClient %v", err)
+					errHappend = true
+					break
+				}
 			}
+			logrus.Infof("server_test.go TestNewClient send data=[%v]", string(data1))
+			logrus.Infof("server_test.go TestNewClient return data=[%v]", string(res1))
+			if !bytes.Equal(data1, res1) {
+				t.Errorf("server_test.go TestNewClient error, send != return")
+				errHappend = true
+				break
+			}
+			break
 		}
-
-		logrus.Infof("data1 == %v", string(data1))
-		logrus.Infof("data2 == %v", string(data2))
-		logrus.Infof("data3 == %v", string(data3))
-
-		logrus.Infof("res1 == %v", string(res1))
-		logrus.Infof("res2 == %v", string(res2))
-		logrus.Infof("res3 == %v", string(res3))
-
-		if !bytes.Equal(data1, res1) || !bytes.Equal(data2, res2) || !bytes.Equal(data3, res3) {
-			t.Errorf("error")
+		client.Close()
+		if errHappend {
 			return
 		}
-		fmt.Println("w1 return: ", string(res1))
-		fmt.Println("w2 return: ", string(res2))
-		fmt.Println("w3 return: ", string(res3))
-		client.Disconnect()
 	}
-	fmt.Println("avg use time ", time.Since(start).Nanoseconds()/int64(times), "ns")
+}
+
+// go test -v -test.run TestNewClient2
+func TestNewClient2(t *testing.T) {
+
+	address := "127.0.0.1:7771"
+
+
+	//go func() {
+	//	dial := net.Dialer{Timeout: time.Second * 3}
+	//	conn, _ := dial.Dial("tcp", address)
+	//	for {
+	//		// 这里发送一堆干扰数据包
+	//		conn.Write([]byte("你好曲儿个人感情如"))
+	//	}
+	//}()
+	times := 100000000
+	var res1 []byte
+	var data1 []byte
+	var client *Client
+	client  = NewClient(context.Background(), address, SetClientConnectTimeout(time.Second * 3))
+	defer client.Close()
+	for  i := 0; i < times; i++ {
+		errHappend := false
+		for {
+			data1 = []byte(RandString())
+			if len(data1) <= 0 {
+				break
+			}
+			w1, _, err := client.Send(data1)
+			if err != nil || w1 == nil {
+				t.Errorf("server_test.go TestNewClient  %v", err)
+				errHappend = true
+				break
+			}
+			if w1 != nil {
+				res1, _, err = w1.Wait(time.Second * 3)
+				if err != nil {
+					t.Errorf("server_test.go TestNewClient %v", err)
+					errHappend = true
+					break
+				}
+			}
+			logrus.Infof("server_test.go TestNewClient send data=[%v]", string(data1))
+			logrus.Infof("server_test.go TestNewClient return data=[%v]", string(res1))
+			if !bytes.Equal(data1, res1) {
+				t.Errorf("server_test.go TestNewClient error, send != return")
+				errHappend = true
+				break
+			}
+			break
+		}
+		if errHappend {
+			return
+		}
+	}
 }

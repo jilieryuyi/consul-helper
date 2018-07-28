@@ -26,7 +26,7 @@ func (c *Clients) remove(node *ClientNode) {
 			break
 		}
 	}
-	log.Debugf("#####################remove node, current len %v", len(*c))
+	log.Debugf("group.go Clients::remove, #####################remove node, current len %v", len(*c))
 }
 
 func (c *Clients) close() {

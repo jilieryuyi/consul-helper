@@ -13,7 +13,6 @@ type Server struct {
 	lock              *sync.Mutex
 	statusLock        *sync.Mutex
 	listener          *net.Listener
-	wg                *sync.WaitGroup
 	clients           Clients
 	status            int
 	conn              *net.TCPConn
@@ -21,6 +20,7 @@ type Server struct {
 	ctx               context.Context
 	onMessageCallback []OnServerMessageFunc
 	codec             ICodec
+	cancel            context.CancelFunc
 }
 type Clients             []*ClientNode
 type OnServerMessageFunc func(node *ClientNode, msgId int64, data []byte)
@@ -49,19 +49,20 @@ func SetServerCodec(codec ICodec) ServerOption {
 // tcp.SetOnServerMessage(func(node *tcp.ClientNode, msgId int64, data []byte) {
 //		node.Send(msgId, data)
 // })
-func NewServer(ctx context.Context, address string, opts ...ServerOption) *Server {
-	tcp := &Server{
+func NewServer(c context.Context, address string, opts ...ServerOption) *Server {
+	ctx, cancel := context.WithCancel(c)
+		tcp := &Server{
 		ctx:               ctx,
 		Address:           address,
 		lock:              new(sync.Mutex),
 		statusLock:        new(sync.Mutex),
-		wg:                new(sync.WaitGroup),
 		listener:          nil,
 		clients:           make(Clients, 0),
 		status:            0,
 		buffer:            make([]byte, 0),
 		onMessageCallback: make([]OnServerMessageFunc, 0),
 		codec:             &Codec{},
+		cancel:            cancel,
 	}
 	go tcp.keepalive()
 	for _, f := range opts {
@@ -72,14 +73,15 @@ func NewServer(ctx context.Context, address string, opts ...ServerOption) *Serve
 
 // start tcp service
 func (tcp *Server) Start() {
-	go func() {
+	//go func()
+	{
 		listen, err := net.Listen("tcp", tcp.Address)
 		if err != nil {
-			log.Panicf("tcp service listen with error: %+v", err)
+			log.Panicf("server.go Server::Start, tcp service listen with error=[%+v]", err)
 			return
 		}
 		tcp.listener = &listen
-		log.Infof("tcp service start with: %s", tcp.Address)
+		log.Infof("server.go Server::Start, tcp service start with: %s", tcp.Address)
 		for {
 			select {
 			case <-tcp.ctx.Done():
@@ -87,27 +89,30 @@ func (tcp *Server) Start() {
 			default:
 			}
 			conn, err := listen.Accept()
+			if isClosedConnError(err) {
+				return
+			}
 			if err != nil {
-				log.Warnf("tcp service accept with error: %+v", err)
+				log.Errorf("server.go Server::Start, accept error, err=[%+v]", err)
 				continue
 			}
 			node := newNode(
-					tcp.ctx,
-					&conn,
-					tcp.codec,
-					setOnNodeClose(func(n *ClientNode) {
-						tcp.lock.Lock()
-						tcp.clients.remove(n)
-						tcp.lock.Unlock()
-					}),
+				tcp.ctx,
+				&conn,
+				tcp.codec,
+				setOnNodeClose(func(n *ClientNode) {
+					tcp.lock.Lock()
+					tcp.clients.remove(n)
+					tcp.lock.Unlock()
+				}),
 				setOnMessage(tcp.onMessageCallback...),
-				)
+			)
 			tcp.lock.Lock()
 			tcp.clients.append(node)
 			tcp.lock.Unlock()
 			go node.readMessage()
 		}
-	}()
+	}//()
 }
 
 // Broadcast data to all connected clients
@@ -119,12 +124,13 @@ func (tcp *Server) Broadcast(msgId int64, data []byte) {
 
 // close service
 func (tcp *Server) Close() {
-	log.Debugf("tcp service closing, waiting for buffer send complete.")
+	tcp.cancel()
+	log.Infof("server.go Server::Close, tcp service closing, waiting for buffer send complete.")
 	if tcp.listener != nil {
 		(*tcp.listener).Close()
 	}
 	tcp.clients.close()
-	log.Debugf("tcp service closed.")
+	log.Infof("server.go Server::Close done.")
 }
 
 // keepalive
