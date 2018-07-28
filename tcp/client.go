@@ -242,7 +242,7 @@ func (tcp *Client) readMessage() {
 			tcp.disconnect()
 			continue
 		}
-		log.Infof("client.go Client::readMessage, reveive: %v, %v", string(readBuffer[:size]), readBuffer[:size])
+		//log.Infof("client.go Client::readMessage, reveive: %v, %v", string(readBuffer[:size]), readBuffer[:size])
 		tcp.onMessage(readBuffer[:size])
 		select {
 		case <-tcp.ctx.Done():
