@@ -90,7 +90,7 @@ func SetWaiterGlobalTimeout(timeout int64) ClientOption {
 	}
 }
 
-func NewClient(ctx context.Context, address string, opts ...ClientOption) *Client {
+func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Client, error) {
 	c := &Client{
 		buffer:            make([]byte, 0),
 		conn:              nil,
@@ -113,12 +113,12 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) *Clien
 	for _, f := range opts {
 		f(c)
 	}
-	c.connect()
+	err := c.connect()
 	go c.keepalive()
 	go c.asyncWriteProcess()
 	go c.keep()
 	go c.readMessage()
-	return c
+	return c, err
 }
 
 func (tcp *Client) delWaiter(msgId int64) {
@@ -154,6 +154,7 @@ func (tcp *Client) Send(data []byte) (*waiter, int, error) {
 	tcp.waiterLock.Unlock()
 	tcp.wg.Add(1)
 	sendMsg := tcp.coder.Encode(msgId, data)
+	tcp.conn.SetWriteDeadline(time.Now().Add(time.Second * 3))
 	num, err  := tcp.conn.Write(sendMsg)
 	return wai, num, err
 }
