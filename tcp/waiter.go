@@ -50,6 +50,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 		return raw, msgId, nil
 	case <- a:
 		log.Errorf("Wait wait timeout, msgId=[%v]", w.msgId)
+		w.onComplete(0)
 		return nil, 0, WaitTimeout
 	}
 	log.Errorf("Wait unknow error, msgId=[%v]", w.msgId)

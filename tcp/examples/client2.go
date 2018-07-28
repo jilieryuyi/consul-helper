@@ -41,7 +41,10 @@ func main() {
 	var client *tcp.Client
 	var err error
 	for  i := 0; i < times; i++ {
+		fmt.Println("###################=>11")
+
 		client, err = tcp.NewClient(context.Background(), address, tcp.SetClientConnectTimeout(time.Second * 3))
+		fmt.Println("###################=>1")
 		errHappend := false
 		errStr := ""
 		for {
@@ -54,6 +57,8 @@ func main() {
 			if len(data1) <= 0 {
 				break
 			}
+			fmt.Println("###################=>21")
+
 			w1, _, err := client.Send(data1)
 			if err != nil || w1 == nil {
 				errStr = err.Error()
@@ -61,6 +66,10 @@ func main() {
 				errHappend = true
 				break
 			}
+			fmt.Println("###################=>2")
+
+			fmt.Println("###################=>31")
+
 			if w1 != nil {
 				res1, _, err = w1.Wait(time.Second * 3)
 				if err != nil {
@@ -70,6 +79,8 @@ func main() {
 					break
 				}
 			}
+			fmt.Println("###################=>3")
+
 			logrus.Infof("server_test.go TestNewClient send data=[%v, %v]", string(data1), data1)
 			logrus.Infof("server_test.go TestNewClient return data=[%v, %v]", string(res1), res1)
 			if !bytes.Equal(data1, res1) {
@@ -80,7 +91,10 @@ func main() {
 			}
 			break
 		}
+		fmt.Println("###################=>41")
 		client.Close()
+		fmt.Println("###################=>4")
+
 		if errHappend {
 			fmt.Println("error:", errStr)
 			os.Exit(1)

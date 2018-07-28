@@ -122,12 +122,15 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 }
 
 func (tcp *Client) delWaiter(msgId int64) {
+	tcp.wg.Done()
+	if msgId <= 0 {
+		return
+	}
 	tcp.waiterLock.Lock()
 	w, ok := tcp.waiter[msgId]
 	if ok {
 		close(w.data)
 		delete(tcp.waiter, msgId)
-		tcp.wg.Done()
 	}
 	tcp.waiterLock.Unlock()
 }
