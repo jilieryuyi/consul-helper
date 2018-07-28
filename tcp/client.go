@@ -240,7 +240,7 @@ func (tcp *Client) readMessage() {
 			tcp.disconnect()
 			continue
 		}
-		log.Infof("client.go Client::readMessage, reveive: %v", string(readBuffer[:size]))
+		log.Infof("client.go Client::readMessage, reveive: %v, %v", string(readBuffer[:size]), readBuffer[:size])
 		tcp.onMessage(readBuffer[:size])
 		select {
 		case <-tcp.ctx.Done():
@@ -278,7 +278,7 @@ func (tcp *Client) onMessage(msg []byte) {
 	for {
 		bufferLen := len(tcp.buffer)
 		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
-		log.Infof("client.go Client::onMessage, client receive: msgId=%v, data=%v", msgId, string(content))
+		log.Infof("client.go Client::onMessage, client receive: msgId=%v, data=%v, %v", msgId, string(content), content)
 		if err != nil {
 			log.Errorf("%v", err)
 			tcp.buffer = make([]byte, 0)
@@ -300,7 +300,7 @@ func (tcp *Client) onMessage(msg []byte) {
 			tcp.waiterLock.RUnlock()
 			data := w.encode(msgId, content)
 			if ok {
-				log.Infof("client.go Client::onMessage, write waiter: msgId=%v, data=%v", msgId, string(data))
+				log.Infof("client.go Client::onMessage, write waiter: msgId=%v, data=%v, %v", msgId, string(data), data)
 				w.data <- data
 			}
 		}

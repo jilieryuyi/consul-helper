@@ -35,7 +35,7 @@ func main() {
 	//		conn.Write([]byte("你好曲儿个人感情如"))
 	//	}
 	//}()
-	times := 10000
+	times := 100000
 	var res1 []byte
 	var data1 []byte
 	var client *tcp.Client
@@ -76,10 +76,11 @@ func main() {
 		}
 		client.Close()
 		if errHappend {
-			fmt.Println(errStr)
+			fmt.Println("error:", errStr)
 			os.Exit(1)
 			return
 		}
 	}
+	fmt.Println("test ok")
 }
 
