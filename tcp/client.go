@@ -200,6 +200,7 @@ func (tcp *Client) asyncWriteProcess() {
 }
 
 func (tcp *Client) keep() {
+	return
 	for {
 		current := int64(time.Now().UnixNano() / 1000000)
 		tcp.waiterLock.Lock()
@@ -312,20 +313,28 @@ func (tcp *Client) onMessage(msg []byte) {
 	}
 }
 
-func (tcp *Client) disconnect() {
+func (tcp *Client) disconnect() error {
 	tcp.wg.Wait()
 	tcp.wgAsyncSend.Wait()
 	if tcp.status & statusConnect <= 0 {
-		return
+		return NotConnect
 	}
-	tcp.conn.Close()
+	log.Infof("disconnect was called")
+	err := tcp.conn.Close()
 	if tcp.status & statusConnect > 0 {
 		tcp.status ^= statusConnect
 	}
+	if err != nil {
+		log.Errorf("disconnect fail, err=[%v]", err)
+	}
+	return err
 }
 
 func (tcp *Client) Close() {
-	tcp.disconnect()
+	err := tcp.disconnect()
+	if err != nil {
+		log.Errorf("Close disconnect fail, err=[%v]", err)
+	}
 	close(tcp.asyncWriteChan)
 }
 

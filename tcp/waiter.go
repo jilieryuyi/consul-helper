@@ -30,8 +30,8 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 	// if timeout is 0, never timeout
 	if timeout <= 0 {
 		data, ok := <- w.data
-		if ! ok {
-			return nil, 0, ChanIsClosed
+		if !ok {
+			return nil, 0, nil//ChanIsClosed
 		}
 		msgId, raw := w.decode(data)
 		w.onComplete(msgId)
@@ -43,7 +43,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 	case data, ok := <- w.data:
 		if !ok {
 			log.Errorf("Wait chan is closed, msgId=[%v]", w.msgId)
-			return nil, 0, ChanIsClosed
+			return nil, 0, nil//ChanIsClosed
 		}
 		msgId, raw := w.decode(data)
 		w.onComplete(msgId)

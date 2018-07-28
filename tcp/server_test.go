@@ -8,6 +8,8 @@ import (
 	//"net"
 	"math/rand"
 	"github.com/sirupsen/logrus"
+	"os"
+	"fmt"
 )
 
 func RandString() string {
@@ -57,6 +59,7 @@ func TestNewClient(t *testing.T) {
 	for  i := 0; i < times; i++ {
 		client  = NewClient(context.Background(), address, SetClientConnectTimeout(time.Second * 3))
 		errHappend := false
+		errStr := ""
 		for {
 			data1 = []byte(RandString())
 			if len(data1) <= 0 {
@@ -64,21 +67,24 @@ func TestNewClient(t *testing.T) {
 			}
 			w1, _, err := client.Send(data1)
 			if err != nil || w1 == nil {
+				errStr = err.Error()
 				t.Errorf("server_test.go TestNewClient  %v", err)
 				errHappend = true
 				break
 			}
 			if w1 != nil {
-				res1, _, err = w1.Wait(time.Second * 3)
+				res1, _, err = w1.Wait(0)
 				if err != nil {
+					errStr = err.Error()
 					t.Errorf("server_test.go TestNewClient %v", err)
 					errHappend = true
 					break
 				}
 			}
-			logrus.Infof("server_test.go TestNewClient send data=[%v]", string(data1))
-			logrus.Infof("server_test.go TestNewClient return data=[%v]", string(res1))
+			logrus.Infof("server_test.go TestNewClient send data=[%v, %v]", string(data1), data1)
+			logrus.Infof("server_test.go TestNewClient return data=[%v, %v]", string(res1), res1)
 			if !bytes.Equal(data1, res1) {
+				errStr = "server_test.go TestNewClient error, send != return"
 				t.Errorf("server_test.go TestNewClient error, send != return")
 				errHappend = true
 				break
@@ -87,6 +93,8 @@ func TestNewClient(t *testing.T) {
 		}
 		client.Close()
 		if errHappend {
+			fmt.Println(errStr)
+			os.Exit(1)
 			return
 		}
 	}
@@ -106,7 +114,7 @@ func TestNewClient2(t *testing.T) {
 	//		conn.Write([]byte("你好曲儿个人感情如"))
 	//	}
 	//}()
-	times := 100000000
+	times := 10000
 	var res1 []byte
 	var data1 []byte
 	var client *Client
