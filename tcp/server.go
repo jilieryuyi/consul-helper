@@ -72,9 +72,9 @@ func NewServer(c context.Context, address string, opts ...ServerOption) *Server 
 }
 
 // start tcp service
+//
 func (tcp *Server) Start() {
-	//go func()
-	{
+	go func(){
 		listen, err := net.Listen("tcp", tcp.Address)
 		if err != nil {
 			log.Panicf("server.go Server::Start, tcp service listen with error=[%+v]", err)
@@ -112,7 +112,7 @@ func (tcp *Server) Start() {
 			tcp.lock.Unlock()
 			go node.readMessage()
 		}
-	}//()
+	}()
 }
 
 // Broadcast data to all connected clients
