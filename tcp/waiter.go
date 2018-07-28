@@ -31,44 +31,49 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 	tick := time.NewTicker(10 * time.Millisecond)
 	// if timeout is 0, never timeout
 	if timeout <= 0 {
-		select {
+		for {
+			select {
 			case data, ok := <-w.data:
-			if !ok {
-				return nil, 0, nil //ChanIsClosed
-			}
-			msgId, raw := w.decode(data)
-			w.onComplete(msgId)
-			return raw, msgId, nil
-		case <- tick.C:
-			if !w.isConnect {
-				w.onComplete(0)
-				return nil, 0, NetWorkIsClosed
+				if !ok {
+					return nil, 0, nil //ChanIsClosed
+				}
+				msgId, raw := w.decode(data)
+				w.onComplete(msgId)
+				return raw, msgId, nil
+			case <-tick.C:
+				if !w.isConnect {
+					w.onComplete(0)
+					return nil, 0, NetWorkIsClosed
+				}
 			}
 		}
 	} else {
 
 		a := time.After(timeout)
-		select {
-		case data, ok := <-w.data:
-			if !ok {
-				log.Errorf("Wait chan is closed, msgId=[%v]", w.msgId)
-				return nil, 0, nil //ChanIsClosed
-			}
-			msgId, raw := w.decode(data)
-			w.onComplete(msgId)
-			return raw, msgId, nil
-		case <-a:
-			log.Errorf("Wait wait timeout, msgId=[%v]", w.msgId)
-			w.onComplete(0)
-			return nil, 0, WaitTimeout
-		case <-tick.C:
-			if !w.isConnect {
+		for {
+			select {
+			case data, ok := <-w.data:
+				if !ok {
+					log.Errorf("Wait chan is closed, msgId=[%v]", w.msgId)
+					return nil, 0, nil //ChanIsClosed
+				}
+				msgId, raw := w.decode(data)
+				w.onComplete(msgId)
+				return raw, msgId, nil
+			case <-a:
+				log.Errorf("Wait wait timeout, msgId=[%v]", w.msgId)
 				w.onComplete(0)
-				return nil, 0, NetWorkIsClosed
+				return nil, 0, WaitTimeout
+			case <-tick.C:
+				if !w.isConnect {
+					w.onComplete(0)
+					return nil, 0, NetWorkIsClosed
+				}
 			}
 		}
 	}
 	log.Errorf("Wait unknow error, msgId=[%v]", w.msgId)
+	w.onComplete(0)
 	return nil, 0, UnknownError
 }
 
