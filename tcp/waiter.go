@@ -11,6 +11,7 @@ type waiter struct {
 	data      chan []byte
 	time      int64
 	onComplete func(int64)
+	isConnect bool
 }
 
 func (w *waiter) encode(msgId int64, raw []byte) []byte {
@@ -27,15 +28,23 @@ func (w *waiter) decode(data []byte) (int64, []byte) {
 
 // 如果timeout <= 0 永不超时
 func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
+	tick := time.NewTicker(10 * time.Millisecond)
 	// if timeout is 0, never timeout
 	if timeout <= 0 {
-		data, ok := <- w.data
-		if !ok {
-			return nil, 0, nil//ChanIsClosed
+		select {
+			case data, ok := <-w.data:
+			if !ok {
+				return nil, 0, nil //ChanIsClosed
+			}
+			msgId, raw := w.decode(data)
+			w.onComplete(msgId)
+			return raw, msgId, nil
+		case <- tick.C:
+			if !w.isConnect {
+				w.onComplete(0)
+				return nil, 0, NetWorkIsClosed
+			}
 		}
-		msgId, raw := w.decode(data)
-		w.onComplete(msgId)
-		return raw, msgId, nil
 	}
 
 	a := time.After(timeout)
@@ -52,6 +61,11 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 		log.Errorf("Wait wait timeout, msgId=[%v]", w.msgId)
 		w.onComplete(0)
 		return nil, 0, WaitTimeout
+	case <- tick.C:
+		if !w.isConnect {
+			w.onComplete(0)
+			return nil, 0, NetWorkIsClosed
+		}
 	}
 	log.Errorf("Wait unknow error, msgId=[%v]", w.msgId)
 	return nil, 0, UnknownError
@@ -69,6 +83,7 @@ func newWaiter(msgId int64, onComplete func(i int64)) *waiter {
 		data:  make(chan []byte, 1),
 		time:  int64(time.Now().UnixNano() / 1000000),
 		onComplete: onComplete,
+		isConnect: true,
 	}
 }
 

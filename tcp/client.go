@@ -17,6 +17,7 @@ var (
  	WaitTimeout  = errors.New("wait timeout")
  	ChanIsClosed = errors.New("wait is closed")
  	UnknownError = errors.New("unknown error")
+ 	NetWorkIsClosed = errors.New("network is closed")
  	globalMsgId int64 = 1
 )
 const (
@@ -324,6 +325,13 @@ func (tcp *Client) disconnect() error {
 	if tcp.status & statusConnect <= 0 {
 		return NotConnect
 	}
+
+	tcp.waiterLock.Lock()
+	for _, v := range tcp.waiter  {
+		v.isConnect = false
+	}
+	tcp.waiterLock.Unlock()
+
 	log.Infof("disconnect was called")
 	err := tcp.conn.Close()
 	if tcp.status & statusConnect > 0 {
