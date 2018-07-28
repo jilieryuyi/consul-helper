@@ -177,7 +177,8 @@ func (tcp *Client) Write(data []byte) (int, error) {
 
 func (tcp *Client) keepalive() {
 	for {
-		tcp.Write(keepalivePackage)
+		tcp.conn.Write(tcp.coder.Encode(1, keepalivePackage))
+		//tcp.Write(keepalivePackage)
 		time.Sleep(time.Second * 3)
 	}
 }
@@ -278,7 +279,7 @@ func (tcp *Client) onMessage(msg []byte) {
 	for {
 		bufferLen := len(tcp.buffer)
 		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
-		log.Infof("client.go Client::onMessage, client receive: msgId=%v, data=%v, %v", msgId, string(content), content)
+		log.Infof("client.go Client::onMessage, client receive: msgId=[%v], data=[%v, %v]", msgId, string(content), content)
 		if err != nil {
 			log.Errorf("%v", err)
 			tcp.buffer = make([]byte, 0)
