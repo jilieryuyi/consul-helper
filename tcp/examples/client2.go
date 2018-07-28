@@ -39,11 +39,17 @@ func main() {
 	var res1 []byte
 	var data1 []byte
 	var client *tcp.Client
+	var err error
 	for  i := 0; i < times; i++ {
-		client  = tcp.NewClient(context.Background(), address, tcp.SetClientConnectTimeout(time.Second * 3))
+		client, err = tcp.NewClient(context.Background(), address, tcp.SetClientConnectTimeout(time.Second * 3))
 		errHappend := false
 		errStr := ""
 		for {
+			if err != nil {
+				errStr = err.Error()
+				errHappend = true
+				break
+			}
 			data1 = []byte(RandString())
 			if len(data1) <= 0 {
 				break
