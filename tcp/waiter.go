@@ -88,7 +88,7 @@ func newWaiter(msgId int64, onComplete func(i int64)) *waiter {
 		data:  make(chan []byte, 1),
 		time:  int64(time.Now().UnixNano() / 1000000),
 		onComplete: onComplete,
-		exitWait: make(chan struct{}),
+		exitWait: make(chan struct{}, 3),
 	}
 }
 
