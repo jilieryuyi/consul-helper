@@ -16,6 +16,24 @@ type waiter struct {
 	exitWait chan struct{}
 }
 
+
+func newWaiter(msgId int64, onComplete func(i int64)) *waiter {
+	if onComplete == nil {
+		onComplete = func(i int64) {
+			// just for some debug
+			fmt.Println("######", i, " is complete######")
+		}
+	}
+	return &waiter{
+		msgId: msgId,
+		data:  make(chan []byte, 1),
+		time:  int64(time.Now().UnixNano() / 1000000),
+		onComplete: onComplete,
+		exitWait: make(chan struct{}, 3),
+	}
+}
+
+// 编码等待的数据
 func (w *waiter) encode(msgId int64, raw []byte) []byte {
 	if w == nil {
 		return nil
@@ -26,6 +44,7 @@ func (w *waiter) encode(msgId int64, raw []byte) []byte {
 	return data
 }
 
+// 解码等待的数据
 func (w *waiter) decode(data []byte) (int64, []byte) {
 	if w == nil {
 		return 0, nil// nil, 0, WaiterNil
@@ -34,12 +53,14 @@ func (w *waiter) decode(data []byte) (int64, []byte) {
 	return msgId, data[8:]
 }
 
+// 手动终止等待
 func (w *waiter) StopWait() {
 	if w == nil {
 		return// nil, 0, WaiterNil
 	}
 	w.exitWait <- struct{}{}
 }
+
 // 如果timeout <= 0 永不超时
 func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 	if w == nil {
@@ -61,7 +82,6 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 					return nil, 0, WaitInterrupt
 			}
 	} else {
-
 		a := time.After(timeout)
 		for {
 			select {
@@ -77,7 +97,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 				log.Errorf("Wait wait timeout, msgId=[%v]", w.msgId)
 				w.onComplete(0)
 				return nil, 0, WaitTimeout
-			case <-w.exitWait:
+			case <- w.exitWait:
 				log.Infof("get Interrupt sig2")
 				w.onComplete(0)
 				return nil, 0, WaitInterrupt
@@ -87,21 +107,5 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 	log.Errorf("Wait unknow error, msgId=[%v]", w.msgId)
 	w.onComplete(0)
 	return nil, 0, UnknownError
-}
-
-func newWaiter(msgId int64, onComplete func(i int64)) *waiter {
-	if onComplete == nil {
-		onComplete = func(i int64) {
-			// just for some debug
-			fmt.Println("######", i, " is complete######")
-		}
-	}
-	return &waiter{
-		msgId: msgId,
-		data:  make(chan []byte, 1),
-		time:  int64(time.Now().UnixNano() / 1000000),
-		onComplete: onComplete,
-		exitWait: make(chan struct{}, 3),
-	}
 }
 
