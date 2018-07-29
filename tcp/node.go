@@ -79,7 +79,14 @@ func (node *ClientNode) close() {
 
 func (node *ClientNode) Send(msgId int64, data []byte) (int, error) {
 	sendData := node.codec.Encode(msgId, data)
-	return (*node.conn).Write(sendData)
+	n, e := (*node.conn).Write(sendData)
+	if e != nil {
+		return n, e
+	}
+	if n != len(sendData) {
+		return n, SendNotComplate
+	}
+	return len(data), nil
 }
 
 func (node *ClientNode) AsyncSend(msgId int64, data []byte) {

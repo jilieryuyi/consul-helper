@@ -11,6 +11,7 @@ var (
 	UnknownError  = errors.New("unknown error")
 	WaitInterrupt = errors.New("wait interrupt")
 	WaiterNil     = errors.New("waiter is nil")
+	SendNotComplate     = errors.New("send not complete")
 )
 
 type Error struct {
