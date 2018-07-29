@@ -123,7 +123,7 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 }
 
 func (tcp *Client) delWaiter(msgId int64) {
-	tcp.wg.Done()
+	//tcp.wg.Done()
 	if msgId <= 0 {
 		return
 	}
@@ -156,7 +156,7 @@ func (tcp *Client) Send(data []byte) (*waiter, int, error) {
 	tcp.waiterLock.Lock()
 	tcp.waiter[wai.msgId] = wai
 	tcp.waiterLock.Unlock()
-	tcp.wg.Add(1)
+	//tcp.wg.Add(1)
 	sendMsg := tcp.coder.Encode(msgId, data)
 	tcp.conn.SetWriteDeadline(time.Now().Add(time.Second * 3))
 	num, err  := tcp.conn.Write(sendMsg)
@@ -216,7 +216,7 @@ func (tcp *Client) keep() {
 				log.Warnf("client.go Client::keep, msgid %v is timeout, will delete", msgId)
 				close(v.data)
 				delete(tcp.waiter, msgId)
-				tcp.wg.Done()
+				//tcp.wg.Done()
 				// 这里为什么不能使用delWaiter的原因是
 				// tcp.waiterLock已加锁，而delWaiter内部也加了锁
 				// tcp.delWaiter(msgId)
@@ -320,8 +320,8 @@ func (tcp *Client) onMessage(msg []byte) {
 }
 
 func (tcp *Client) disconnect() error {
-	tcp.wg.Wait()
-	tcp.wgAsyncSend.Wait()
+	//tcp.wg.Wait()
+	//tcp.wgAsyncSend.Wait()
 	if tcp.status & statusConnect <= 0 {
 		return NotConnect
 	}
