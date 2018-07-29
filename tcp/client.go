@@ -179,6 +179,7 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 			log.Errorf("Client::Send SetWriteDeadline fail, msg=[%v, %+v], err=[%v]", string(data), data, err)
 			return nil, 0, err
 		}
+		defer tcp.conn.SetWriteDeadline(time.Time{})
 	}
 
 	// 这里有一个坑
@@ -228,6 +229,7 @@ func (tcp *Client) Write(data []byte, writeTimeout time.Duration) (int, error) {
 			log.Errorf("Client::Write SetWriteDeadline fail, msg=[%v, %+v], err=[%v]", string(data), data, err)
 			return 0, err
 		}
+		defer tcp.conn.SetWriteDeadline(time.Time{})
 	}
 
 	msgId   := tcp.getMsgId()
