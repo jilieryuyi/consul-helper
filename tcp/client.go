@@ -342,6 +342,7 @@ func (tcp *Client) disconnect() error {
 	if err != nil {
 		log.Errorf("disconnect fail, err=[%v]", err)
 	}
+	log.Infof("disconnect was called3")
 	return err
 }
 
