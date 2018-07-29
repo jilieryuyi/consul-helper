@@ -325,14 +325,15 @@ func (tcp *Client) disconnect() error {
 	if tcp.status & statusConnect <= 0 {
 		return NotConnect
 	}
+	log.Infof("disconnect was called")
 
 	tcp.waiterLock.Lock()
 	for _, v := range tcp.waiter  {
 		v.StopWait()
 	}
 	tcp.waiterLock.Unlock()
+	log.Infof("disconnect was called2")
 
-	log.Infof("disconnect was called")
 	err := tcp.conn.Close()
 	if tcp.status & statusConnect > 0 {
 		tcp.status ^= statusConnect
