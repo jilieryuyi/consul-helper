@@ -9,22 +9,32 @@ import (
 	"bytes"
 	"net/http"
 	_ "net/http/pprof"
+	"math/rand"
 )
-
+func RandString() string {
+	str := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	bt := []byte(str)
+	result := make([]byte, 0)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	slen := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)
+	for i := 0; i < slen; i++ {
+		result = append(result, bt[r.Intn(len(bt))])
+	}
+	return string(result)
+}
 func main() {
 	// 先运行server端
 	// go run server.go
 	// 在运行client端
 	// go run client
 	address := "127.0.0.1:7771"
-	client  := tcp.NewClient(context.Background())
-	err     := client.Connect(address, time.Second * 3)
+	client, err := tcp.NewClient(context.Background(), address, tcp.SetClientConnectTimeout(time.Second * 3))
 
 	if err != nil {
 		logrus.Panicf("connect to %v error: %v", address, err)
 		return
 	}
-	defer client.Disconnect()
+	defer client.Close()
 
 	go func() {
 		//http://localhost:8880/debug/pprof/  内存性能分析工具
@@ -45,22 +55,14 @@ func main() {
 	start := time.Now()
 	times := 1000000
 	for  {
-		data1 := []byte("hello")
-		data2 := []byte("word")
-		data3 := []byte("hahahahahahahahahahah")
+		data1 := []byte(RandString())
 		w1, _, _ := client.Send(data1)
-		w2, _, _ := client.Send(data2)
-		w3, _, _ := client.Send(data3)
-		res1, _ := w1.Wait(time.Second * 3)
-		res2, _ := w2.Wait(time.Second * 3)
-		res3, _ := w3.Wait(time.Second * 3)
+		res1, _, _ := w1.Wait(time.Second * 3)
 
-		if !bytes.Equal(data1, res1) || !bytes.Equal(data2, res2) || !bytes.Equal(data3, res3) {
+		if !bytes.Equal(data1, res1)  {
 			logrus.Panicf("error")
 		}
 		fmt.Println("w1 return: ", string(res1))
-		fmt.Println("w2 return: ", string(res2))
-		fmt.Println("w3 return: ", string(res3))
 	}
 	fmt.Println("avg use time ", time.Since(start).Nanoseconds()/int64(times)/1000000, "ms")
 }

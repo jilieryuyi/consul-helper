@@ -185,6 +185,11 @@ func (tcp *Client) Write(data []byte) (int, error) {
 
 func (tcp *Client) keepalive() {
 	for {
+		select {
+		case <-tcp.ctx.Done():
+			return
+		default:
+		}
 		if tcp.conn == nil {
 			time.Sleep(time.Second * 3)
 			continue
@@ -212,6 +217,8 @@ func (tcp *Client) asyncWriteProcess() {
 			if err != nil {
 				log.Errorf("client.go Client::asyncWriteProcess, send failure: %+v", err)
 			}
+		case <-tcp.ctx.Done():
+			return
 		}
 	}
 }
@@ -219,6 +226,11 @@ func (tcp *Client) asyncWriteProcess() {
 func (tcp *Client) keep() {
 	return
 	for {
+		select {
+		case <-tcp.ctx.Done():
+			return
+		default:
+		}
 		current := int64(time.Now().UnixNano() / 1000000)
 		tcp.waiterLock.Lock()
 		for msgId, v := range tcp.waiter  {
