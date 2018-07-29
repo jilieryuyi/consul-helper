@@ -165,7 +165,7 @@ func (tcp *Client) AsyncSend(data []byte) {
 func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, error) {
 	log.Infof("Client::Send, msg=[%v, %+v]", string(data), data)
 	if tcp.status & statusConnect <= 0 {
-		log.Infof("Client::Send fail, msg=[%v, %+v], err=[%v]", string(data), data, NotConnect)
+		log.Errorf("Client::Send fail, msg=[%v, %+v], err=[%v]", string(data), data, NotConnect)
 		return nil, 0, NotConnect
 	}
 	// 获取消息id
@@ -387,7 +387,7 @@ func (tcp *Client) onMessage(msg []byte) {
 				log.Infof("Client::onMessage write waiter, msgId=[%v], data=[%v, %v]", msgId, string(data), data)
 				w.data <- data
 			} else {
-				log.Errorf("Client::onMessage waiter not found, msgId=[%v]")
+				log.Errorf("Client::onMessage waiter not found, msgId=[%v]", msgId)
 			}
 		}
 		// 判断是否是心跳包，心跳包不触发回调函数
