@@ -56,8 +56,18 @@ func main() {
 	times := 1000000
 	for  {
 		data1 := []byte(RandString())
-		w1, _, _ := client.Send(data1, 0)
-		res1, _, _ := w1.Wait(0)
+		logrus.Infof("send [%v]", data1)
+		w1, _, err := client.Send(data1, 0)
+		if err != nil {
+			logrus.Panicf("[%v] ", err)
+		}
+		logrus.Infof("send complete [%v]", data1)
+
+		res1, _, err := w1.Wait(time.Second)
+		if err != nil {
+			logrus.Panicf("[%v] ", err)
+		}
+		logrus.Infof("wait complete [%v]", res1)
 
 		if !bytes.Equal(data1, res1)  {
 			logrus.Panicf("[%v] != [%v]", data1, res1)

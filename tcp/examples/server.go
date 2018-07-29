@@ -8,10 +8,12 @@ import (
 	"syscall"
 	"net/http"
 	_ "net/http/pprof"
+	"github.com/sirupsen/logrus"
 )
 func main() {
 	address := "127.0.0.1:7771"
 	server  := tcp.NewServer(context.Background(), address, tcp.SetOnServerMessage(func(node *tcp.ClientNode, msgId int64, data []byte) {
+		logrus.Infof(" server send, msgid=%v, data=%v", msgId, data)
 		node.Send(msgId, data)
 	}))
 	server.Start()
