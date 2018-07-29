@@ -86,7 +86,7 @@ func SetBufferSize(size int) ClientOption {
 // 单位是毫秒
 // 设置waiter检测的超时时间，默认为6000毫秒
 // 如果超过该时间，waiter就会被删除
-func SetWaiterGlobalTimeout(timeout int64) ClientOption {
+func SetWaiterTimeout(timeout int64) ClientOption {
 	return func(tcp *Client) {
 		tcp.waiterGlobalTimeout = timeout
 	}
