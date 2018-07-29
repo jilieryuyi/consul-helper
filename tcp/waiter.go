@@ -12,6 +12,7 @@ type waiter struct {
 	time      int64
 	onComplete func(int64)
 	client *Client
+	exitWait chan struct{}
 }
 
 func (w *waiter) encode(msgId int64, raw []byte) []byte {
@@ -26,12 +27,13 @@ func (w *waiter) decode(data []byte) (int64, []byte) {
 	return msgId, data[8:]
 }
 
+func (w *waiter) StopWait() {
+	w.exitWait <- struct{}{}
+}
 // 如果timeout <= 0 永不超时
 func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
-	tick := time.NewTicker(10 * time.Millisecond)
 	// if timeout is 0, never timeout
 	if timeout <= 0 {
-		for {
 			select {
 			case data, ok := <-w.data:
 				if !ok {
@@ -40,14 +42,10 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 				msgId, raw := w.decode(data)
 				w.onComplete(msgId)
 				return raw, msgId, nil
-			case <-tick.C:
-				log.Println("####tick")
-				if w.client.status & statusConnect <= 0 {
+			case <-w.exitWait:
 					w.onComplete(0)
 					return nil, 0, NetWorkIsClosed
-				}
 			}
-		}
 	} else {
 
 		a := time.After(timeout)
@@ -65,11 +63,9 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 				log.Errorf("Wait wait timeout, msgId=[%v]", w.msgId)
 				w.onComplete(0)
 				return nil, 0, WaitTimeout
-			case <-tick.C:
-				if w.client.status & statusConnect <= 0 {
-					w.onComplete(0)
-					return nil, 0, NetWorkIsClosed
-				}
+			case <-w.exitWait:
+				w.onComplete(0)
+				return nil, 0, NetWorkIsClosed
 			}
 		}
 	}
@@ -78,7 +74,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 	return nil, 0, UnknownError
 }
 
-func newWaiter(client *Client, msgId int64, onComplete func(i int64)) *waiter {
+func newWaiter(msgId int64, onComplete func(i int64)) *waiter {
 	if onComplete == nil {
 		onComplete = func(i int64) {
 			// just for some debug
@@ -90,7 +86,7 @@ func newWaiter(client *Client, msgId int64, onComplete func(i int64)) *waiter {
 		data:  make(chan []byte, 1),
 		time:  int64(time.Now().UnixNano() / 1000000),
 		onComplete: onComplete,
-		client: client,
+		exitWait: make(chan struct{}),
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 
 // go test -v -test.run TestWaiter_Wait
 func TestWaiter_Wait(t *testing.T) {
+
 	wai := newWaiter(100, func(i int64) {
 		fmt.Println("######", i, " is complete######")
 	})
