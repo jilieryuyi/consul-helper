@@ -320,8 +320,7 @@ func (tcp *Client) onMessage(msg []byte) {
 }
 
 func (tcp *Client) disconnect() error {
-	tcp.waiterLock.Lock()
-	defer tcp.waiterLock.Unlock()
+
 	//tcp.wg.Wait()
 	//tcp.wgAsyncSend.Wait()
 	if tcp.status & statusConnect <= 0 {
@@ -329,11 +328,14 @@ func (tcp *Client) disconnect() error {
 	}
 	log.Infof("disconnect was called")
 
-
+	tcp.waiterLock.Lock()
 	for msgId, v := range tcp.waiter  {
 		log.Infof("%v stop wait", msgId)
 		v.StopWait()
+		close(v.data)
+		delete(tcp.waiter, msgId)
 	}
+	tcp.waiterLock.Unlock()
 
 	log.Infof("disconnect was called2")
 
