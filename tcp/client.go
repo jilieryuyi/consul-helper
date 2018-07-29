@@ -195,7 +195,7 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 		tcp.waiterLock.Lock()
 		tcp.waiter[wai.msgId] = wai
 		tcp.waiterLock.Unlock()
-		return wai, num, err
+		return wai, num, nil
 	}
 
 	// 发生错误
