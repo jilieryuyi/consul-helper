@@ -14,9 +14,12 @@ var (
  	globalMsgId int64 = 1
 )
 const (
-	statusConnect     = 1 << iota
-	MaxInt64          = int64(1) << 62
-	asyncWriteChanLen = 10000
+	statusConnect        = 1 << iota
+	MaxInt64             = int64(1) << 62
+	asyncWriteChanLen    = 10000
+	defaultWaiterTimeout = 6000
+	defaultWriteTimeout  = 6//秒
+	defaultBufferSize    = 4096
 )
 type Client struct {
 	ctx                 context.Context
@@ -78,6 +81,12 @@ func SetWaiterTimeout(timeout int64) ClientOption {
 	}
 }
 
+// 创建一个tcp客户端
+// 第一个参数为context上下文
+// 第二个参数是客户端将要连接的目标地址，如： 127.0.0.1:9998
+// 后面的参数为可选参数
+// 返回值为客户端对象和err错误信息
+// 对应的错误为连接目标tcp地址出错时返回
 func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Client, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	c := &Client{
@@ -88,10 +97,10 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 		asyncWriteChan:      make(chan []byte, asyncWriteChanLen),
 		ctx:                 ctx,
 		coder:               &Codec{},
-		bufferSize:          4096,
+		bufferSize:          defaultBufferSize,
 		waiter:              make(map[int64]*waiter),
 		waiterLock:          new(sync.RWMutex),
-		waiterGlobalTimeout: 6000,
+		waiterGlobalTimeout: defaultWaiterTimeout,
 		wg:                  new(sync.WaitGroup),
 		wgAsyncSend:         new(sync.WaitGroup),
 		address:             address,
@@ -113,8 +122,9 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 	return c, nil
 }
 
+// 清理waiter的api，这个api在waiter超时时被调用
+// 参数为消息id
 func (tcp *Client) delWaiter(msgId int64) {
-	//tcp.wg.Done()
 	if msgId <= 0 {
 		return
 	}
@@ -127,48 +137,100 @@ func (tcp *Client) delWaiter(msgId int64) {
 	tcp.waiterLock.Unlock()
 }
 
-func (tcp *Client) AsyncSend(data []byte) {
-	tcp.wgAsyncSend.Add(1)
-	tcp.asyncWriteChan <- data
-}
-
-func (tcp *Client) Send(data []byte) (*waiter, int, error) {
-	if tcp.status & statusConnect <= 0 {
-		return nil, 0, NotConnect
-	}
+func (tcp *Client) getMsgId() int64 {
 	msgId := atomic.AddInt64(&globalMsgId, 1)
 	// check max msgId
 	if msgId > MaxInt64 {
 		atomic.StoreInt64(&globalMsgId, 1)
 		msgId = atomic.AddInt64(&globalMsgId, 1)
 	}
-	wai := newWaiter(msgId, tcp.delWaiter)
-	log.Infof("client.go Client::Send, msgId=[%v], msg=[%v]", wai.msgId, string(data))
-	tcp.waiterLock.Lock()
-	tcp.waiter[wai.msgId] = wai
-	tcp.waiterLock.Unlock()
-	//tcp.wg.Add(1)
+	return msgId
+}
+
+// 异步发送消息
+func (tcp *Client) AsyncSend(data []byte) {
+	tcp.wgAsyncSend.Add(1)
+	tcp.asyncWriteChan <- data
+}
+
+// 同步发送消息，支持同步等效消息响应
+// 同步获取响应结果通过waiter的api Wait支持
+// 参数为需要发送的消息
+// 返回值微分三个
+// 第一个返回值为waiter对象
+// 第二个返回值为已发送的消息大小
+// 最后一个为错误信息，如果没有错误发生，此值为nil
+// 连接已断开时返回NotConnect
+// 其他错误值为tcp发送错误的返回值
+func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, error) {
+	log.Infof("Client::Send, msg=[%v, %+v]", string(data), data)
+	if tcp.status & statusConnect <= 0 {
+		log.Infof("Client::Send fail, msg=[%v, %+v], err=[%v]", string(data), data, NotConnect)
+		return nil, 0, NotConnect
+	}
+	// 获取消息id
+	msgId   := tcp.getMsgId()
 	sendMsg := tcp.coder.Encode(msgId, data)
-	tcp.conn.SetWriteDeadline(time.Now().Add(time.Second * 3))
-	num, err  := tcp.conn.Write(sendMsg)
-	return wai, num, err
+
+	// 设置写超时时间
+	if writeTimeout > 0 {
+		err := tcp.conn.SetWriteDeadline(time.Now().Add(time.Second * 3))
+		if err != nil {
+			log.Errorf("Client::Send SetWriteDeadline fail, msg=[%v, %+v], err=[%v]", string(data), data, err)
+			return nil, 0, err
+		}
+	}
+
+	// 发送消息
+	num, err := tcp.conn.Write(sendMsg)
+	if num != len(sendMsg) {
+		log.Errorf("Client::Send Write not complete, msg=[%v, %+v]", string(data), data)
+	}
+
+	// 如果成功（没有错误发生）
+	// 则返回waiter支持
+	if err == nil {
+		wai := newWaiter(msgId, tcp.delWaiter)
+		tcp.waiterLock.Lock()
+		tcp.waiter[wai.msgId] = wai
+		tcp.waiterLock.Unlock()
+		return wai, num, err
+	}
+
+	// 发生错误
+	log.Errorf("Client::Send Write fail, msg=[%v, %+v], err=[%v]", string(data), data, err)
+	return nil, num, err
 }
 
 // write api 与 send api的差别在于 send 支持同步wait等待服务端响应
 // write 则不支持
-func (tcp *Client) Write(data []byte) (int, error) {
+// 返回值为发送消息大小和发生的错误
+func (tcp *Client) Write(data []byte, writeTimeout time.Duration) (int, error) {
 	if tcp.status & statusConnect <= 0 {
 		return 0, NotConnect
 	}
-	msgId   := atomic.AddInt64(&globalMsgId, 1)
-	// check max msgId
-	if msgId > MaxInt64 {
-		atomic.StoreInt64(&globalMsgId, 1)
-		msgId = atomic.AddInt64(&globalMsgId, 1)
+	// 设置写超时时间
+	if writeTimeout > 0 {
+		err := tcp.conn.SetWriteDeadline(time.Now().Add(time.Second * 3))
+		if err != nil {
+			log.Errorf("Client::Write SetWriteDeadline fail, msg=[%v, %+v], err=[%v]", string(data), data, err)
+			return 0, err
+		}
 	}
+
+	msgId   := tcp.getMsgId()
 	sendMsg := tcp.coder.Encode(msgId, data)
 	num, err  := tcp.conn.Write(sendMsg)
-	return num, err
+	// 判断消息是否发生完整
+	if num != len(sendMsg) {
+		log.Errorf("Client::Write Write not complete, msg=[%v, %+v]", string(data), data)
+	}
+	// 无错误发生
+	if err == nil {
+		return num, err
+	}
+	log.Errorf("Client::Write Write fail, msg=[%v, %+v], err=[%v]", string(data), data, err)
+	return num, nil
 }
 
 func (tcp *Client) keepalive() {
@@ -200,7 +262,7 @@ func (tcp *Client) asyncWriteProcess() {
 				return
 			}
 			tcp.wgAsyncSend.Done()
-			_, err := tcp.Write(sendData)
+			_, err := tcp.Write(sendData, time.Second * defaultWriteTimeout)
 			if err != nil {
 				log.Errorf("Client::asyncWriteProcess Write fail, err=[%+v]", err)
 			}

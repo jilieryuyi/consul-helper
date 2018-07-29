@@ -81,7 +81,7 @@ func main() {
 				// 如不超时不现实
 				// 如果这个时候网络断开了，返回的错误可以忽略
 				res1, _, err = w1.Wait(0)
-				if err != nil && err != tcp.NetWorkIsClosed {
+				if err != nil && err != tcp.WaitInterrupt {
 					errStr = err.Error()
 					logrus.Errorf("server_test.go TestNewClient %v", err)
 					errHappend = true
@@ -92,7 +92,7 @@ func main() {
 
 			logrus.Infof("server_test.go TestNewClient send data=[%v, %v]", string(data1), data1)
 			logrus.Infof("server_test.go TestNewClient return data=[%v, %v]", string(res1), res1)
-			if !bytes.Equal(data1, res1) && err != tcp.NetWorkIsClosed {
+			if !bytes.Equal(data1, res1) && err != tcp.WaitInterrupt {
 				errStr = "server_test.go TestNewClient error, send != return"
 				logrus.Errorf("server_test.go TestNewClient error, send != return")
 				errHappend = true
