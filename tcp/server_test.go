@@ -12,17 +12,7 @@ import (
 	"fmt"
 )
 
-func RandString() string {
-	str := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	bt := []byte(str)
-	result := make([]byte, 0)
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	slen := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)
-	for i := 0; i < slen; i++ {
-		result = append(result, bt[r.Intn(len(bt))])
-	}
-	return string(result)
-}
+
 
 // go test -v -test.run TestNewServer
 func TestNewServer(t *testing.T) {
@@ -61,7 +51,7 @@ func TestNewClient(t *testing.T) {
 		errHappend := false
 		errStr := ""
 		for {
-			data1 = []byte(RandString())
+			data1 = []byte(RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)))
 			if len(data1) <= 0 {
 				break
 			}
@@ -123,7 +113,7 @@ func TestNewClient2(t *testing.T) {
 	for  i := 0; i < times; i++ {
 		errHappend := false
 		for {
-			data1 = []byte(RandString())
+			data1 = []byte(RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)))
 			if len(data1) <= 0 {
 				break
 			}

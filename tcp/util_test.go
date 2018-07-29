@@ -22,3 +22,10 @@ func Test_isClosedConnError(t *testing.T) {
 		return
 	}
 }
+
+// go test -v -test.run TestRandString
+func TestRandString(t *testing.T) {
+	if 10 != len(RandString(10)) {
+		t.Errorf("RandString error")
+	}
+}
