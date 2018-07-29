@@ -320,10 +320,10 @@ func (tcp *Client) readMessage() {
 		size, err  := tcp.conn.Read(readBuffer)
 
 		// 网络断开错误
-		if isClosedConnError(err) {
-			tcp.disconnect()
-			continue
-		}
+		//if isClosedConnError(err) {
+		//	tcp.disconnect()
+		//	continue
+		//}
 		// 读取错误
 		if err != nil || size <= 0 {
 			log.Errorf("Client::readMessage fail, err=[%+v]", err)
