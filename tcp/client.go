@@ -181,6 +181,15 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 		}
 	}
 
+	// 这里有一个坑
+	// 必须要在conn.Write之前写入tcp.waiter
+	// 如果在之后写入，可能出现服务端收到消息并且响应到client先于waiter写入
+	// 这个时候就会出现waiter找不到的情况
+	wai := newWaiter(msgId, tcp.delWaiter)
+	tcp.waiterLock.Lock()
+	tcp.waiter[wai.msgId] = wai
+	tcp.waiterLock.Unlock()
+
 	// 发送消息
 	num, err := tcp.conn.Write(sendMsg)
 	if num != len(sendMsg) {
@@ -191,13 +200,15 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 	// 则返回waiter支持
 	if err == nil {
 		log.Infof("Client::Send success add waiter, msgId=[%v], msg=[%v, %+v]", msgId, string(data), data)
-		wai := newWaiter(msgId, tcp.delWaiter)
-		tcp.waiterLock.Lock()
-		tcp.waiter[wai.msgId] = wai
-		tcp.waiterLock.Unlock()
 		return wai, num, nil
 	}
 
+	// 如果发生了错误，不用返回waiter
+	// 这个时候直接关掉waiter
+	tcp.waiterLock.Lock()
+	wai.StopWait()
+	delete(tcp.waiter, wai.msgId)
+	tcp.waiterLock.Unlock()
 	// 发生错误
 	log.Errorf("Client::Send Write fail, msg=[%v, %+v], err=[%v]", string(data), data, err)
 	return nil, num, err
