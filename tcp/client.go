@@ -386,6 +386,8 @@ func (tcp *Client) onMessage(msg []byte) {
 			if ok {
 				log.Infof("Client::onMessage write waiter, msgId=[%v], data=[%v, %v]", msgId, string(data), data)
 				w.data <- data
+			} else {
+				log.Errorf("Client::onMessage waiter not found, msgId=[%v]")
 			}
 		}
 		// 判断是否是心跳包，心跳包不触发回调函数
