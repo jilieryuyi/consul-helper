@@ -182,6 +182,14 @@ func (tcp *Client) Write(data []byte) (int, error) {
 
 func (tcp *Client) keepalive() {
 	for {
+		if tcp.conn == nil {
+			time.Sleep(time.Second * 3)
+			continue
+		}
+		if tcp.status & statusConnect <= 0  {
+			time.Sleep(time.Second * 3)
+			continue
+		}
 		tcp.conn.Write(tcp.coder.Encode(1, keepalivePackage))
 		//tcp.Write(keepalivePackage)
 		time.Sleep(time.Second * 3)

@@ -10,6 +10,7 @@ import (
 	"context"
 	"math/rand"
 
+	"strings"
 )
 func RandString() string {
 	str := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -44,6 +45,11 @@ func main() {
 		fmt.Println("###################=>11")
 
 		client, err = tcp.NewClient(context.Background(), address, tcp.SetClientConnectTimeout(time.Second * 3))
+		if err != nil && strings.Index(err.Error(), "too many open files") > 0 {
+			client.Close()
+			time.Sleep(time.Second * 3)
+			continue
+		}
 		fmt.Println("###################=>1")
 		errHappend := false
 		errStr := ""
