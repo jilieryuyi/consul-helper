@@ -65,7 +65,7 @@ func TestNewClient(t *testing.T) {
 			if len(data1) <= 0 {
 				break
 			}
-			w1, _, err := client.Send(data1)
+			w1, _, err := client.Send(data1, 0)
 			if err != nil || w1 == nil {
 				errStr = err.Error()
 				t.Errorf("server_test.go TestNewClient  %v", err)
@@ -127,7 +127,7 @@ func TestNewClient2(t *testing.T) {
 			if len(data1) <= 0 {
 				break
 			}
-			w1, _, err := client.Send(data1)
+			w1, _, err := client.Send(data1, 0)
 			if err != nil || w1 == nil {
 				t.Errorf("server_test.go TestNewClient  %v", err)
 				errHappend = true

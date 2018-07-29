@@ -5,6 +5,7 @@ import (
 	"time"
 	"bytes"
 	"fmt"
+	"github.com/sirupsen/logrus"
 )
 
 // go test -v -test.run TestWaiter_Wait
@@ -70,5 +71,24 @@ func TestWaiter_Wait(t *testing.T) {
 		t.Errorf("wait error")
 		return
 	}
+
+}
+
+// go test -v -test.run TestWaiter_encode
+func TestWaiter_encode(t *testing.T) {
+	wai := newWaiter(100, func(i int64) {
+		fmt.Println("######", i, " is complete######")
+	})
+	msgId := int64(100)
+	data := []byte("hello")
+
+	encodeData := wai.encode(msgId, data)
+	decodeMsgId, decodeData := wai.decode(encodeData)
+	logrus.Infof("%v, %v", msgId, data)
+	logrus.Infof("%v, %v", decodeMsgId, decodeData)
+	if msgId != decodeMsgId || !bytes.Equal(data, decodeData) {
+		t.Errorf("encode and decode fail")
+	}
+
 
 }
