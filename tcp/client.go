@@ -287,7 +287,6 @@ func (tcp *Client) asyncWriteProcess() {
 }
 
 func (tcp *Client) checkWaiterTimeout() {
-	return
 	for {
 		select {
 		case <-tcp.ctx.Done():
@@ -415,21 +414,18 @@ func (tcp *Client) disconnect() error {
 	// 等待异步发送全部发送完毕
 	tcp.wgAsyncSend.Wait()
 	if tcp.status & statusConnect <= 0 {
+		log.Errorf("disconnect fail, err=[%v]", NotConnect)
 		return NotConnect
 	}
-	log.Infof("disconnect was called")
 
 	tcp.waiterLock.Lock()
 	for msgId, v := range tcp.waiter  {
-		log.Infof("%v stop wait", msgId)
+		log.Infof("disconnect, %v stop wait", msgId)
 		v.StopWait()
 		close(v.data)
 		delete(tcp.waiter, msgId)
 	}
 	tcp.waiterLock.Unlock()
-
-	log.Infof("disconnect was called2")
-
 	err := tcp.conn.Close()
 	if tcp.status & statusConnect > 0 {
 		tcp.status ^= statusConnect
@@ -437,7 +433,6 @@ func (tcp *Client) disconnect() error {
 	if err != nil {
 		log.Errorf("disconnect fail, err=[%v]", err)
 	}
-	log.Infof("disconnect was called3")
 	return err
 }
 
