@@ -13,7 +13,7 @@ import (
 func main() {
 	address := "127.0.0.1:7771"
 	server  := tcp.NewServer(context.Background(), address, tcp.SetOnServerMessage(func(node *tcp.ClientNode, msgId int64, data []byte) {
-		logrus.Infof(" server send, msgid=%v, data=%v", msgId, string(data))
+		logrus.Infof("server send, msgid=[%v], data=[%v]", msgId, string(data))
 		n,e := node.Send(msgId, data)
 		if e != nil || n != len(data) {
 			logrus.Errorf("send fail")

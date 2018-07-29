@@ -43,3 +43,4 @@
 bin/nohup.out
 examples/nohup.out
 tcp/examples/nohup.out
+*.log
