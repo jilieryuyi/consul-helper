@@ -41,6 +41,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 				w.onComplete(msgId)
 				return raw, msgId, nil
 			case <-tick.C:
+				log.Println("####tick")
 				if w.client.status & statusConnect <= 0 {
 					w.onComplete(0)
 					return nil, 0, NetWorkIsClosed
