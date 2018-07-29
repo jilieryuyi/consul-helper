@@ -328,7 +328,8 @@ func (tcp *Client) disconnect() error {
 	log.Infof("disconnect was called")
 
 	tcp.waiterLock.Lock()
-	for _, v := range tcp.waiter  {
+	for msgId, v := range tcp.waiter  {
+		log.Infof("%v stop wait", msgId)
 		v.StopWait()
 	}
 	tcp.waiterLock.Unlock()
