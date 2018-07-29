@@ -48,6 +48,7 @@ type Client struct {
 	disConnectChan      chan struct{}
 	address string
 	connectTimeout time.Duration
+	cancel context.CancelFunc
 }
 
 type ClientOption      func(tcp *Client)
@@ -92,6 +93,7 @@ func SetWaiterGlobalTimeout(timeout int64) ClientOption {
 }
 
 func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Client, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	c := &Client{
 		buffer:            make([]byte, 0),
 		conn:              nil,
@@ -110,6 +112,7 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 		connectChan:       make(chan *connectInfo),
 		disConnectChan:    make(chan struct{}),
 		address: address,
+		cancel:cancel,
 	}
 	for _, f := range opts {
 		f(c)
@@ -238,6 +241,11 @@ func (tcp *Client) keep() {
 
 func (tcp *Client) readMessage() {
 	for {
+		select {
+			case <-tcp.ctx.Done():
+				return
+			default:
+		}
 		if tcp.status & statusConnect <= 0  {
 			tcp.connect()
 			time.Sleep(time.Millisecond * 100)
@@ -256,11 +264,6 @@ func (tcp *Client) readMessage() {
 		}
 		//log.Infof("client.go Client::readMessage, reveive: %v, %v", string(readBuffer[:size]), readBuffer[:size])
 		tcp.onMessage(readBuffer[:size])
-		select {
-		case <-tcp.ctx.Done():
-			return
-		default:
-		}
 	}
 }
 
@@ -359,6 +362,7 @@ func (tcp *Client) disconnect() error {
 }
 
 func (tcp *Client) Close() {
+	tcp.cancel()
 	err := tcp.disconnect()
 	if err != nil {
 		log.Errorf("Close disconnect fail, err=[%v]", err)
