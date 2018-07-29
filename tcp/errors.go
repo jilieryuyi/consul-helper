@@ -10,6 +10,7 @@ var (
 	WaitTimeout   = errors.New("wait timeout")
 	UnknownError  = errors.New("unknown error")
 	WaitInterrupt = errors.New("wait interrupt")
+	WaiterNil     = errors.New("waiter is nil")
 )
 
 type Error struct {

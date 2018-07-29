@@ -80,7 +80,7 @@ func main() {
 				// todo 如果这个时候断网了，消息岂不是永远收不到
 				// 如不超时不现实
 				// 如果这个时候网络断开了，返回的错误可以忽略
-				res1, _, err = w1.Wait(0)
+				res1, _, err = w1.Wait(time.Second * 3)
 				if err != nil && err != tcp.WaitInterrupt {
 					errStr = err.Error()
 					logrus.Errorf("server_test.go TestNewClient %v", err)

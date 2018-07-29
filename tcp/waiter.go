@@ -17,6 +17,9 @@ type waiter struct {
 }
 
 func (w *waiter) encode(msgId int64, raw []byte) []byte {
+	if w == nil {
+		return nil
+	}
 	data := make([]byte, 8 + len(raw))
 	binary.LittleEndian.PutUint64(data[:8], uint64(msgId))
 	copy(data[8:], raw)
@@ -24,15 +27,24 @@ func (w *waiter) encode(msgId int64, raw []byte) []byte {
 }
 
 func (w *waiter) decode(data []byte) (int64, []byte) {
+	if w == nil {
+		return 0, nil// nil, 0, WaiterNil
+	}
 	msgId := int64(binary.LittleEndian.Uint64(data[:8]))
 	return msgId, data[8:]
 }
 
 func (w *waiter) StopWait() {
+	if w == nil {
+		return// nil, 0, WaiterNil
+	}
 	w.exitWait <- struct{}{}
 }
 // 如果timeout <= 0 永不超时
 func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
+	if w == nil {
+		return nil, 0, WaiterNil
+	}
 	// if timeout is 0, never timeout
 	if timeout <= 0 {
 			select {
