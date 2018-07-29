@@ -8,39 +8,30 @@ import (
 	"github.com/jilieryuyi/wing-go/tcp"
 	"os"
 	"context"
-	"math/rand"
-
 	"strings"
+	"math/rand"
+	"net"
 )
-func RandString() string {
-	str := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	bt := []byte(str)
-	result := make([]byte, 0)
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	slen := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)
-	for i := 0; i < slen; i++ {
-		result = append(result, bt[r.Intn(len(bt))])
-	}
-	return string(result)
-}
+
+// 这里的客户端测试目的为了测试直连，然后直接关闭这种情形
+// 然后观察server端和client端的运行情况
 func main() {
-
 	address := "127.0.0.1:7771"
-
-
-	//go func() {
-	//	dial := net.Dialer{Timeout: time.Second * 3}
-	//	conn, _ := dial.Dial("tcp", address)
-	//	for {
-	//		// 这里发送一堆干扰数据包
-	//		conn.Write([]byte("你好曲儿个人感情如"))
-	//	}
-	//}()
-	times := 100000
-	var res1 []byte
-	var data1 []byte
-	var client *tcp.Client
-	var err error
+	go func() {
+		dial := net.Dialer{Timeout: time.Second * 3}
+		conn, _ := dial.Dial("tcp", address)
+		for {
+			// 这里发送一堆干扰数据包
+			conn.Write([]byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024))))
+		}
+	}()
+	var (
+		times = 100000
+		res1 []byte
+		data1 []byte
+		client *tcp.Client
+		err error
+	)
 	for  i := 0; i < times; i++ {
 		fmt.Println("###################=>11")
 
@@ -59,7 +50,7 @@ func main() {
 				errHappend = true
 				break
 			}
-			data1 = []byte(RandString())
+			data1 = []byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)))
 			if len(data1) <= 0 {
 				break
 			}

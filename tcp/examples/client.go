@@ -10,24 +10,26 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"math/rand"
+	"net"
 )
-func RandString() string {
-	str := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	bt := []byte(str)
-	result := make([]byte, 0)
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	slen := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(32)
-	for i := 0; i < slen; i++ {
-		result = append(result, bt[r.Intn(len(bt))])
-	}
-	return string(result)
-}
+
+// 这里的客户端主要测试长连接不断开的情况下
+// 不断的发送、接收数据，观察server端和client端的运行情况
+
 func main() {
+	address := "127.0.0.1:7771"
+	go func() {
+		dial := net.Dialer{Timeout: time.Second * 3}
+		conn, _ := dial.Dial("tcp", address)
+		for {
+			// 这里发送一堆干扰数据包
+			conn.Write([]byte([]byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(32)))))
+		}
+	}()
 	// 先运行server端
 	// go run server.go
 	// 在运行client端
 	// go run client
-	address := "127.0.0.1:7771"
 	client, err := tcp.NewClient(context.Background(), address, tcp.SetClientConnectTimeout(time.Second * 3))
 
 	if err != nil {
@@ -52,10 +54,10 @@ func main() {
 		http.ListenAndServe("127.0.0.1:7773", nil)
 	}()
 
-	start := time.Now()
-	times := 1000000
-	for  {
-		data1 := []byte(RandString())
+	//start := time.Now()
+	//times := 1000000
+	for i := 0; i < 100000; i++  {
+		data1 := []byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(32)))
 		logrus.Infof("send")
 		w1, _, err := client.Send(data1, 0)
 		if err != nil {
@@ -74,5 +76,6 @@ func main() {
 		}
 		fmt.Println("w1 return: ", string(res1))
 	}
-	fmt.Println("avg use time ", time.Since(start).Nanoseconds()/int64(times)/1000000, "ms")
+	fmt.Println("test ok")
+	//fmt.Println("avg use time ", time.Since(start).Nanoseconds()/int64(times)/1000000, "ms")
 }
