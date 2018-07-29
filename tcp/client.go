@@ -190,7 +190,7 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 	// 如果成功（没有错误发生）
 	// 则返回waiter支持
 	if err == nil {
-		log.Infof("Client::Send success, msgId=[%v], msg=[%v, %+v]", msgId, string(data), data)
+		log.Infof("Client::Send success add waiter, msgId=[%v], msg=[%v, %+v]", msgId, string(data), data)
 		wai := newWaiter(msgId, tcp.delWaiter)
 		tcp.waiterLock.Lock()
 		tcp.waiter[wai.msgId] = wai

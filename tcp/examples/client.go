@@ -16,7 +16,7 @@ func RandString() string {
 	bt := []byte(str)
 	result := make([]byte, 0)
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	slen := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)
+	slen := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(32)
 	for i := 0; i < slen; i++ {
 		result = append(result, bt[r.Intn(len(bt))])
 	}
