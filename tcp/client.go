@@ -151,7 +151,7 @@ func (tcp *Client) Send(data []byte) (*waiter, int, error) {
 		atomic.StoreInt64(&globalMsgId, 1)
 		msgId = atomic.AddInt64(&globalMsgId, 1)
 	}
-	wai := newWaiter(msgId, tcp.delWaiter)
+	wai := newWaiter(tcp, msgId, tcp.delWaiter)
 	log.Infof("client.go Client::Send, msgId=[%v], msg=[%v]", wai.msgId, string(data))
 	tcp.waiterLock.Lock()
 	tcp.waiter[wai.msgId] = wai
@@ -326,11 +326,11 @@ func (tcp *Client) disconnect() error {
 		return NotConnect
 	}
 
-	tcp.waiterLock.Lock()
-	for _, v := range tcp.waiter  {
-		v.isConnect = false
-	}
-	tcp.waiterLock.Unlock()
+	//tcp.waiterLock.Lock()
+	//for _, v := range tcp.waiter  {
+	//	v.isConnect = false
+	//}
+	//tcp.waiterLock.Unlock()
 
 	log.Infof("disconnect was called")
 	err := tcp.conn.Close()

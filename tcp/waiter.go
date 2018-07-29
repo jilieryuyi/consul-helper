@@ -11,7 +11,7 @@ type waiter struct {
 	data      chan []byte
 	time      int64
 	onComplete func(int64)
-	isConnect bool
+	client *Client
 }
 
 func (w *waiter) encode(msgId int64, raw []byte) []byte {
@@ -41,7 +41,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 				w.onComplete(msgId)
 				return raw, msgId, nil
 			case <-tick.C:
-				if !w.isConnect {
+				if w.client.status & statusConnect <= 0 {
 					w.onComplete(0)
 					return nil, 0, NetWorkIsClosed
 				}
@@ -65,7 +65,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 				w.onComplete(0)
 				return nil, 0, WaitTimeout
 			case <-tick.C:
-				if !w.isConnect {
+				if w.client.status & statusConnect <= 0 {
 					w.onComplete(0)
 					return nil, 0, NetWorkIsClosed
 				}
@@ -77,7 +77,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 	return nil, 0, UnknownError
 }
 
-func newWaiter(msgId int64, onComplete func(i int64)) *waiter {
+func newWaiter(client *Client, msgId int64, onComplete func(i int64)) *waiter {
 	if onComplete == nil {
 		onComplete = func(i int64) {
 			// just for some debug
@@ -89,7 +89,7 @@ func newWaiter(msgId int64, onComplete func(i int64)) *waiter {
 		data:  make(chan []byte, 1),
 		time:  int64(time.Now().UnixNano() / 1000000),
 		onComplete: onComplete,
-		isConnect: true,
+		client: client,
 	}
 }
 
