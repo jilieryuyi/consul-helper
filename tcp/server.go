@@ -27,9 +27,10 @@ type OnServerMessageFunc func(node *ClientNode, msgId int64, data []byte)
 type ServerOption        func(s *Server)
 var keepalivePackage     = []byte{
 	byte(0),byte(0), byte(0), byte(0),
-byte('k'),byte('e'),byte('e'),byte('p'),
-byte('a'),byte('l'),byte('i'),byte('v'),byte('e'),
-byte(0),byte(0), byte(0), byte(0)}
+	byte('k'), byte('e'), byte('e'), byte('p'),
+	byte('a'),byte('l'),byte('i'),byte('v'),byte('e'),
+	byte(0),byte(0), byte(0), byte(0),
+}
 
 // set receive msg callback func
 func SetOnServerMessage(f ...OnServerMessageFunc) ServerOption {

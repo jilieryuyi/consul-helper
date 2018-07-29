@@ -43,9 +43,6 @@ type Client struct {
 	waiterGlobalTimeout int64 //毫秒
 	wg                  *sync.WaitGroup
 	wgAsyncSend         *sync.WaitGroup
-	closeChan           chan struct{}
-	connectChan         chan *connectInfo
-	disConnectChan      chan struct{}
 	address string
 	connectTimeout time.Duration
 	cancel context.CancelFunc
@@ -64,7 +61,7 @@ func SetOnMessage(f ...OnClientEventFunc) ClientOption {
 }
 
 // 用来设置编码解码的接口
-func SetCoder(coder ICodec) ClientOption {
+func SetCodec(coder ICodec) ClientOption {
 	return func(tcp *Client) {
 		tcp.coder = coder
 	}
@@ -95,34 +92,36 @@ func SetWaiterTimeout(timeout int64) ClientOption {
 func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Client, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	c := &Client{
-		buffer:            make([]byte, 0),
-		conn:              nil,
-		status:            0,
-		onMessageCallback: make([]OnClientEventFunc, 0),
-		asyncWriteChan:    make(chan []byte, asyncWriteChanLen),
-		ctx:               ctx,
-		coder:             &Codec{},
-		bufferSize:        4096,
-		waiter:            make(map[int64]*waiter),
-		waiterLock:        new(sync.RWMutex),
+		buffer:              make([]byte, 0),
+		conn:                nil,
+		status:              0,
+		onMessageCallback:   make([]OnClientEventFunc, 0),
+		asyncWriteChan:      make(chan []byte, asyncWriteChanLen),
+		ctx:                 ctx,
+		coder:               &Codec{},
+		bufferSize:          4096,
+		waiter:              make(map[int64]*waiter),
+		waiterLock:          new(sync.RWMutex),
 		waiterGlobalTimeout: 6000,
-		wg:                new(sync.WaitGroup),
-		wgAsyncSend:       new(sync.WaitGroup),
-		closeChan:         make(chan struct{}),
-		connectChan:       make(chan *connectInfo),
-		disConnectChan:    make(chan struct{}),
-		address: address,
-		cancel:cancel,
+		wg:                  new(sync.WaitGroup),
+		wgAsyncSend:         new(sync.WaitGroup),
+		address:             address,
+		cancel:              cancel,
 	}
 	for _, f := range opts {
 		f(c)
 	}
 	err := c.connect()
+	if err != nil {
+		close(c.asyncWriteChan)
+		cancel()
+		return nil, err
+	}
 	go c.keepalive()
 	go c.asyncWriteProcess()
 	go c.keep()
 	go c.readMessage()
-	return c, err
+	return c, nil
 }
 
 func (tcp *Client) delWaiter(msgId int64) {

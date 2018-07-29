@@ -47,7 +47,6 @@ func main() {
 		client, err = tcp.NewClient(context.Background(), address, tcp.SetClientConnectTimeout(time.Second * 3))
 		if err != nil && strings.Index(err.Error(), "too many open files") > 0 {
 			logrus.Errorf("%+v", err)
-			client.Close()
 			time.Sleep(time.Second * 3)
 			continue
 		}
