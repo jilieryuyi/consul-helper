@@ -6,18 +6,11 @@ import (
 	"time"
 	"sync"
 	"context"
-	"errors"
 	"sync/atomic"
 	"bytes"
 )
 
 var (
-	NotConnect   = errors.New("not connect")
- 	IsConnected  = errors.New("is connected")
- 	WaitTimeout  = errors.New("wait timeout")
- 	ChanIsClosed = errors.New("wait is closed")
- 	UnknownError = errors.New("unknown error")
- 	NetWorkIsClosed = errors.New("network is closed")
  	globalMsgId int64 = 1
 )
 const (
@@ -25,10 +18,6 @@ const (
 	MaxInt64          = int64(1) << 62
 	asyncWriteChanLen = 10000
 )
-type connectInfo struct {
-	address string
-	timeout time.Duration
-}
 type Client struct {
 	ctx                 context.Context
 	buffer              []byte
@@ -207,17 +196,18 @@ func (tcp *Client) asyncWriteProcess() {
 	for {
 		select {
 		case sendData, ok := <- tcp.asyncWriteChan:
-			//async send support
 			if !ok {
 				return
 			}
 			tcp.wgAsyncSend.Done()
 			_, err := tcp.Write(sendData)
 			if err != nil {
-				log.Errorf("client.go Client::asyncWriteProcess, send failure: %+v", err)
+				log.Errorf("Client::asyncWriteProcess Write fail, err=[%+v]", err)
 			}
 		case <-tcp.ctx.Done():
-			return
+			if len(tcp.asyncWriteChan) <= 0 {
+				return
+			}
 		}
 	}
 }
@@ -342,9 +332,9 @@ func (tcp *Client) onMessage(msg []byte) {
 }
 
 func (tcp *Client) disconnect() error {
-
 	//tcp.wg.Wait()
-	//tcp.wgAsyncSend.Wait()
+	// 等待异步发送全部发送完毕
+	tcp.wgAsyncSend.Wait()
 	if tcp.status & statusConnect <= 0 {
 		return NotConnect
 	}

@@ -60,7 +60,7 @@ func main() {
 		res1, _, _ := w1.Wait(time.Second * 3)
 
 		if !bytes.Equal(data1, res1)  {
-			logrus.Panicf("error")
+			logrus.Panicf("[%v] != [%v]", data1, res1)
 		}
 		fmt.Println("w1 return: ", string(res1))
 	}

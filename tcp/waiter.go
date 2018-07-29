@@ -5,9 +5,7 @@ import (
 	"encoding/binary"
 	log "github.com/sirupsen/logrus"
 	"fmt"
-	"errors"
 )
-var WaitInterrupt = errors.New("wait interrupt")
 
 type waiter struct {
 	msgId     int64
