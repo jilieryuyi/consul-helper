@@ -43,6 +43,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 				w.onComplete(msgId)
 				return raw, msgId, nil
 			case <-w.exitWait:
+				log.Infof("get network disconnect sig")
 					w.onComplete(0)
 					return nil, 0, NetWorkIsClosed
 			}
@@ -64,6 +65,7 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 				w.onComplete(0)
 				return nil, 0, WaitTimeout
 			case <-w.exitWait:
+				log.Infof("get network disconnect sig2")
 				w.onComplete(0)
 				return nil, 0, NetWorkIsClosed
 			}
