@@ -56,4 +56,19 @@ func TestWaiter_Wait(t *testing.T) {
 		return
 	}
 
+	go func() {
+		time.Sleep(time.Second * 5)
+		//wai.data <-  wai.encode(wai.msgId, raw)
+		wai.StopWait()
+	}()
+
+	// 测试永不超时的情况
+	// 手动中断等待
+	// 这里的 err 应该等于 WaitInterrupt
+	byt, msgId, err = wai.Wait(0)
+	if err == nil {
+		t.Errorf("wait error")
+		return
+	}
+
 }

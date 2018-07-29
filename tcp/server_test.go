@@ -57,7 +57,7 @@ func TestNewClient(t *testing.T) {
 	var data1 []byte
 	var client *Client
 	for  i := 0; i < times; i++ {
-		client  = NewClient(context.Background(), address, SetClientConnectTimeout(time.Second * 3))
+		client, _ = NewClient(context.Background(), address, SetClientConnectTimeout(time.Second * 3))
 		errHappend := false
 		errStr := ""
 		for {
@@ -118,7 +118,7 @@ func TestNewClient2(t *testing.T) {
 	var res1 []byte
 	var data1 []byte
 	var client *Client
-	client  = NewClient(context.Background(), address, SetClientConnectTimeout(time.Second * 3))
+	client, _ = NewClient(context.Background(), address, SetClientConnectTimeout(time.Second * 3))
 	defer client.Close()
 	for  i := 0; i < times; i++ {
 		errHappend := false
