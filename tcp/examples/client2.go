@@ -65,7 +65,7 @@ func main() {
 			}
 			fmt.Println("###################=>21")
 
-			w1, _, err := client.Send(data1)
+			w1, _, err := client.Send(data1, 0)
 			if err != nil || w1 == nil {
 				errStr = err.Error()
 				logrus.Errorf("server_test.go TestNewClient  %v", err)

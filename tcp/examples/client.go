@@ -56,8 +56,8 @@ func main() {
 	times := 1000000
 	for  {
 		data1 := []byte(RandString())
-		w1, _, _ := client.Send(data1)
-		res1, _, _ := w1.Wait(time.Second * 3)
+		w1, _, _ := client.Send(data1, 0)
+		res1, _, _ := w1.Wait(0)
 
 		if !bytes.Equal(data1, res1)  {
 			logrus.Panicf("[%v] != [%v]", data1, res1)

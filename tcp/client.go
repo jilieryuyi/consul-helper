@@ -117,7 +117,7 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 	}
 	go c.keepalive()
 	go c.asyncWriteProcess()
-	go c.keep()
+	go c.checkWaiterTimeout()
 	go c.readMessage()
 	return c, nil
 }
@@ -274,7 +274,7 @@ func (tcp *Client) asyncWriteProcess() {
 	}
 }
 
-func (tcp *Client) keep() {
+func (tcp *Client) checkWaiterTimeout() {
 	return
 	for {
 		select {
@@ -287,7 +287,7 @@ func (tcp *Client) keep() {
 		for msgId, v := range tcp.waiter  {
 			// check timeout
 			if current - v.time >= tcp.waiterGlobalTimeout {
-				log.Warnf("client.go Client::keep, msgid %v is timeout, will delete", msgId)
+				log.Warnf("Client::keep, msgid=[%v] is timeout, will delete", msgId)
 				close(v.data)
 				delete(tcp.waiter, msgId)
 				//tcp.wg.Done()
@@ -309,6 +309,7 @@ func (tcp *Client) readMessage() {
 				return
 			default:
 		}
+		// 如果当前状态为离线，尝试重新连接
 		if tcp.status & statusConnect <= 0  {
 			tcp.connect()
 			time.Sleep(time.Millisecond * 100)
@@ -316,16 +317,18 @@ func (tcp *Client) readMessage() {
 		}
 		readBuffer := make([]byte, tcp.bufferSize)
 		size, err  := tcp.conn.Read(readBuffer)
+
+		// 网络断开错误
 		if isClosedConnError(err) {
 			tcp.disconnect()
 			continue
 		}
+		// 读取错误
 		if err != nil || size <= 0 {
-			log.Errorf("client.go Client::readMessage, client read with error: %+v", err)
+			log.Errorf("Client::readMessage fail, err=[%+v]", err)
 			tcp.disconnect()
 			continue
 		}
-		//log.Infof("client.go Client::readMessage, reveive: %v, %v", string(readBuffer[:size]), readBuffer[:size])
 		tcp.onMessage(readBuffer[:size])
 	}
 }
@@ -339,7 +342,7 @@ func (tcp *Client) connect() error {
 	dial := net.Dialer{Timeout: tcp.connectTimeout}
 	conn, err := dial.Dial("tcp", tcp.address)
 	if err != nil {
-		log.Errorf("client.go Client::Connect, start client with error: %+v", err)
+		log.Errorf("Client::Connect Dial fail, err=[%+v]", err)
 		return err
 	}
 	tcp.conn = conn
@@ -350,7 +353,7 @@ func (tcp *Client) connect() error {
 func (tcp *Client) onMessage(msg []byte) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("client.go Client::onMessage, onMessage recover%+v, %+v", err, tcp.buffer)
+			log.Errorf("Client::onMessage recover, err=[%+v], buffer=[%+v, %+v]", err, string(tcp.buffer), tcp.buffer)
 			tcp.buffer = make([]byte, 0)
 		}
 	}()
@@ -360,7 +363,7 @@ func (tcp *Client) onMessage(msg []byte) {
 		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
 		//log.Infof("client.go Client::onMessage, client receive: msgId=[%v], data=[%v, %v]", msgId, string(content), content)
 		if err != nil {
-			log.Errorf("%v", err)
+			log.Errorf("Client::onMessage coder Decode fail, err=[%v]", err)
 			tcp.buffer = make([]byte, 0)
 			return
 		}
@@ -371,7 +374,7 @@ func (tcp *Client) onMessage(msg []byte) {
 			tcp.buffer = append(tcp.buffer[:0], tcp.buffer[pos:]...)
 		} else {
 			tcp.buffer = make([]byte, 0)
-			log.Errorf("client.go Client::onMessage, pos %v (olen=%v) error, content=%v(%v) len is %v, data is: %+v", pos, bufferLen, content, string(content), len(tcp.buffer), tcp.buffer)
+			log.Errorf("Client::onMessage pos error, pos=[%v], bufferLen=[%v], content=[(%v) %v], buffer=[(%+v) %v", pos, bufferLen, string(content), content, len(tcp.buffer), tcp.buffer)
 		}
 		// 1 is system id
 		if msgId > 1 {
@@ -380,7 +383,7 @@ func (tcp *Client) onMessage(msg []byte) {
 			tcp.waiterLock.RUnlock()
 			data := w.encode(msgId, content)
 			if ok {
-				log.Infof("client.go Client::onMessage, write waiter: msgId=[%v], data=[%v, %v]", msgId, string(data), data)
+				log.Infof("Client::onMessage write waiter, msgId=[%v], data=[%v, %v]", msgId, string(data), data)
 				w.data <- data
 			}
 		}
