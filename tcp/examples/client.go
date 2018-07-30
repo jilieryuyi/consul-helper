@@ -65,7 +65,7 @@ func main() {
 		}
 		logrus.Infof("send complete")
 
-		res1, _, err := w1.Wait(time.Second * 3)
+		res1, _, err := w1.Wait(time.Second * 30)
 		if err != nil {
 			logrus.Panicf("[%v] ", err)
 		}
