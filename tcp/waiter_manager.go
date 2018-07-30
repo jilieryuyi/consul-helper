@@ -26,12 +26,18 @@ func newWaiterManager(ctx context.Context) *waiterManager {
 }
 
 func (m *waiterManager) append(wai *waiter) {
+	if m == nil {
+		return
+	}
 	m.waiterLock.Lock()
 	m.waiter[wai.msgId] = wai
 	m.waiterLock.Unlock()
 }
 
 func (m *waiterManager) clear(msgId int64) {
+	if m == nil {
+		return
+	}
 	m.waiterLock.Lock()
 	wai, ok := m.waiter[msgId]
 	if ok {
@@ -44,6 +50,9 @@ func (m *waiterManager) clear(msgId int64) {
 }
 
 func (m *waiterManager) clearTimeout() {
+	if m == nil {
+		return
+	}
 	current := int64(time.Now().UnixNano() / 1000000)
 	m.waiterLock.Lock()
 	for msgId, v := range m.waiter  {
@@ -65,6 +74,9 @@ func (m *waiterManager) clearTimeout() {
 }
 
 func (m *waiterManager) get(msgId int64) *waiter {
+	if m == nil {
+		return nil
+	}
 	m.waiterLock.RLock()
 	wai, ok := m.waiter[msgId]
 	m.waiterLock.RUnlock()
@@ -82,13 +94,15 @@ func (m *waiterManager) clearAll() {
 		v.StopWait()
 		v.onComplete = nil
 		v.msgId = 0
-		//close(v.data)
 		delete(m.waiter, msgId)
 	}
 	m.waiterLock.Unlock()
 }
 
 func (m *waiterManager) checkWaiterTimeout() {
+	if m == nil {
+		return
+	}
 	for {
 		select {
 		case <-m.ctx.Done():
@@ -96,24 +110,6 @@ func (m *waiterManager) checkWaiterTimeout() {
 		default:
 		}
 		m.clearTimeout()
-		//current := int64(time.Now().UnixNano() / 1000000)
-		//tcp.waiterLock.Lock()
-		//for msgId, v := range tcp.waiter  {
-		//	// check timeout
-		//	if current - v.time >= tcp.waiterGlobalTimeout {
-		//		log.Warnf("Client::keep, msgid=[%v] is timeout, will delete", msgId)
-		//		//close(v.data)
-		//		v.msgId = 0
-		//		v.onComplete = nil
-		//		delete(tcp.waiter, msgId)
-		//		//tcp.wg.Done()
-		//		// 这里为什么不能使用delWaiter的原因是
-		//		// tcp.waiterLock已加锁，而delWaiter内部也加了锁
-		//		// tcp.delWaiter(msgId)
-		//	}
-		//}
-		//tcp.waiterLock.Unlock()
-		//fmt.Println("#######################tcp.waiter len ", len(tcp.waiter))
 		time.Sleep(time.Second * 3)
 	}
 }
