@@ -54,7 +54,8 @@ func main() {
 		http.ListenAndServe("127.0.0.1:7773", nil)
 	}()
 
-	//start := time.Now()
+	start := time.Now()
+	defer fmt.Println("use time ", time.Since(start))
 	//times := 1000000
 	for i := 0; i < 100000; i++  {
 		data1 := []byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(32)))
