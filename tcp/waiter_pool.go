@@ -34,7 +34,7 @@ func (p *waiterPool) get(msgId int64, oncomplete func(i int64)) (*waiter, error)
 			return w, nil
 		}
 	}
-	if int64(len(p.pool)) < p.maxSize {
+	if int64(len(p.pool)) < p.maxSize - 1 {
 		w := newWaiter(msgId, oncomplete)
 		p.pool = append(p.pool, w)
 		return w, nil

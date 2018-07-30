@@ -27,7 +27,7 @@ func TestWaiter_Wait(t *testing.T) {
 	// 测试正常的数据写入流程
 	// 写入数据
 	raw := []byte("hello")
-	wai.data <-  wai.encode(wai.msgId, raw)
+	wai.post(wai.msgId, raw)
 	// 这个时候读到的数据应该是hello，err应该为nil
 	byt, msgId, err = wai.Wait(time.Second)
 	fmt.Println(string(byt), msgId, err)
