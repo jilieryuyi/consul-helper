@@ -92,6 +92,7 @@ func (m *waiterManager) clearAll() {
 		log.Infof("clearAll, %v stop wait", msgId)
 		v.onComplete = nil
 		v.msgId = 0
+		v.StopWait()
 		delete(m.waiter, msgId)
 	}
 	m.waiterLock.Unlock()
