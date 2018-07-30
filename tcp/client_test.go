@@ -96,14 +96,14 @@ func TestNewClient2(t *testing.T) {
 	server := NewTestServer(address)
 	server.Start()
 	defer server.Close()
-	go func() {
-		dial := net.Dialer{Timeout: time.Second * 3}
-		conn, _ := dial.Dial("tcp", address)
-		for {
-			// 这里发送一堆干扰数据包
-			conn.Write([]byte("你好曲儿个人感情如"))
-		}
-	}()
+	//go func() {
+	//	dial := net.Dialer{Timeout: time.Second * 3}
+	//	conn, _ := dial.Dial("tcp", address)
+	//	for {
+	//		// 这里发送一堆干扰数据包
+	//		conn.Write([]byte("你好曲儿个人感情如"))
+	//	}
+	//}()
 	var (
 		times = 100
 	 	res1 []byte
