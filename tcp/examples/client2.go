@@ -26,7 +26,7 @@ func main() {
 		}
 	}()
 	var (
-		times = 100000
+		times = 1000
 		res1 []byte
 		data1 []byte
 		client *tcp.Client
