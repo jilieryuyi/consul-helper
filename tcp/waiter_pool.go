@@ -1,6 +1,9 @@
 package tcp
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type waiterPool struct {
 	maxSize int64
@@ -27,6 +30,7 @@ func (p *waiterPool) get(msgId int64, oncomplete func(i int64)) (*waiter, error)
 		if w.msgId <= 0 {
 			w.msgId = msgId
 			w.onComplete = oncomplete
+			w.time = int64(time.Now().UnixNano() / 1000000)
 			return w, nil
 		}
 	}
