@@ -12,6 +12,9 @@ type waiterPool struct {
 }
 
 func newWaiterPool(maxSize int64) *waiterPool {
+	if maxSize < 8 {
+		maxSize = 8
+	}
 	p := &waiterPool{
 		maxSize: maxSize,
 		pool: make([]*waiter, 64),
