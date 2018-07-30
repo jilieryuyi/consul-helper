@@ -77,7 +77,6 @@ func NewServer(c context.Context, address string, opts ...ServerOption) *Server 
 }
 
 // start tcp service
-//
 func (tcp *Server) Start() {
 	go func(){
 		listen, err := net.Listen("tcp", tcp.Address)
