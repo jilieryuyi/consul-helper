@@ -50,7 +50,7 @@ func main() {
 				errHappend = true
 				break
 			}
-			data1 = []byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)))
+			data1 = []byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(32)))
 			if len(data1) <= 0 {
 				break
 			}

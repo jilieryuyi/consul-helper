@@ -4,7 +4,6 @@ import (
 	"time"
 	"encoding/binary"
 	log "github.com/sirupsen/logrus"
-	"fmt"
 )
 
 type waiter struct {
@@ -18,12 +17,12 @@ type waiter struct {
 
 
 func newWaiter(msgId int64, onComplete func(i int64)) *waiter {
-	if onComplete == nil {
-		onComplete = func(i int64) {
-			// just for some debug
-			fmt.Println("######", i, " is complete######")
-		}
-	}
+	//if onComplete == nil {
+	//	onComplete = func(i int64) {
+	//		// just for some debug
+	//		fmt.Println("######", i, " is complete######")
+	//	}
+	//}
 	return &waiter{
 		msgId: msgId,
 		data:  make(chan []byte, 1),
@@ -74,12 +73,16 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 					return nil, 0, nil //ChanIsClosed
 				}
 				msgId, raw := w.decode(data)
-				w.onComplete(msgId)
+				if w.onComplete != nil {
+					w.onComplete(msgId)
+				}
 				return raw, msgId, nil
 			case <-w.exitWait:
 				log.Infof("get Interrupt sig")
+				if w.onComplete != nil {
 					w.onComplete(0)
-					return nil, 0, WaitInterrupt
+				}
+				return nil, 0, WaitInterrupt
 			}
 	} else {
 		a := time.After(timeout)
@@ -91,21 +94,35 @@ func (w *waiter) Wait(timeout time.Duration) ([]byte, int64, error) {
 					return nil, 0, nil //ChanIsClosed
 				}
 				msgId, raw := w.decode(data)
-				w.onComplete(msgId)
+				if w.onComplete != nil {
+					w.onComplete(msgId)
+				}
 				return raw, msgId, nil
 			case <-a:
 				log.Errorf("Wait wait timeout, msgId=[%v]", w.msgId)
-				w.onComplete(0)
+				if w.onComplete != nil {
+					w.onComplete(0)
+				}
 				return nil, 0, WaitTimeout
 			case <- w.exitWait:
 				log.Infof("get Interrupt sig2")
-				w.onComplete(0)
+				if w.onComplete != nil {
+					w.onComplete(0)
+				}
 				return nil, 0, WaitInterrupt
 			}
 		}
 	}
 	log.Errorf("Wait unknow error, msgId=[%v]", w.msgId)
-	w.onComplete(0)
+	if w.onComplete != nil {
+		w.onComplete(0)
+	}
 	return nil, 0, UnknownError
 }
 
+func (w *waiter) post(msgId int64, content []byte) {
+	if w == nil {
+		return
+	}
+	w.data <- w.encode(msgId, content)
+}

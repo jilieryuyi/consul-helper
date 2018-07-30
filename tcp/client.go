@@ -30,14 +30,16 @@ type Client struct {
 	onMessageCallback   []OnClientEventFunc
 	asyncWriteChan      chan []byte
 	coder               ICodec
-	waiter              map[int64] *waiter
-	waiterLock          *sync.RWMutex
+	//waiter              map[int64] *waiter
+	//waiterLock          *sync.RWMutex
 	waiterGlobalTimeout int64 //毫秒
 	wg                  *sync.WaitGroup
 	wgAsyncSend         *sync.WaitGroup
 	address string
 	connectTimeout time.Duration
 	cancel context.CancelFunc
+	waiterPool *waiterPool
+	waiterManager *waiterManager
 }
 
 type ClientOption      func(tcp *Client)
@@ -98,13 +100,15 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 		ctx:                 ctx,
 		coder:               &Codec{},
 		bufferSize:          defaultBufferSize,
-		waiter:              make(map[int64]*waiter),
-		waiterLock:          new(sync.RWMutex),
-		waiterGlobalTimeout: defaultWaiterTimeout,
+		//waiter:              make(map[int64]*waiter),
+		//waiterLock:          new(sync.RWMutex),
+		//waiterGlobalTimeout: defaultWaiterTimeout,
 		wg:                  new(sync.WaitGroup),
 		wgAsyncSend:         new(sync.WaitGroup),
 		address:             address,
 		cancel:              cancel,
+		waiterPool:          newWaiterPool(1024),
+		waiterManager:       newWaiterManager(),
 	}
 	for _, f := range opts {
 		f(c)
@@ -120,21 +124,6 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 	go c.checkWaiterTimeout()
 	go c.readMessage()
 	return c, nil
-}
-
-// 清理waiter的api，这个api在waiter超时时被调用
-// 参数为消息id
-func (tcp *Client) delWaiter(msgId int64) {
-	if msgId <= 0 {
-		return
-	}
-	tcp.waiterLock.Lock()
-	w, ok := tcp.waiter[msgId]
-	if ok {
-		close(w.data)
-		delete(tcp.waiter, msgId)
-	}
-	tcp.waiterLock.Unlock()
 }
 
 func (tcp *Client) getMsgId() int64 {
@@ -186,10 +175,14 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 	// 必须要在conn.Write之前写入tcp.waiter
 	// 如果在之后写入，可能出现服务端收到消息并且响应到client先于waiter写入
 	// 这个时候就会出现waiter找不到的情况
-	wai := newWaiter(msgId, tcp.delWaiter)
-	tcp.waiterLock.Lock()
-	tcp.waiter[wai.msgId] = wai
-	tcp.waiterLock.Unlock()
+	wai, err := tcp.waiterPool.get(msgId, tcp.waiterManager.clear)//newWaiter(msgId, tcp.delWaiter)
+	if err != nil {
+		return nil, 0, err
+	}
+	tcp.waiterManager.append(wai)
+	//tcp.waiterLock.Lock()
+	//tcp.waiter[wai.msgId] = wai
+	//tcp.waiterLock.Unlock()
 
 	// 发送消息
 	num, err := tcp.conn.Write(sendMsg)
@@ -206,10 +199,13 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 
 	// 如果发生了错误，不用返回waiter
 	// 这个时候直接关掉waiter
-	tcp.waiterLock.Lock()
-	wai.StopWait()
-	delete(tcp.waiter, wai.msgId)
-	tcp.waiterLock.Unlock()
+	tcp.waiterManager.clear(msgId)
+	//tcp.waiterLock.Lock()
+	//wai.StopWait()
+	//wai.msgId = 0
+	//wai.onComplete = nil
+	//delete(tcp.waiter, msgId)
+	//tcp.waiterLock.Unlock()
 	// 发生错误
 	log.Errorf("Client::Send Write fail, msg=[%v, %+v], err=[%v]", string(data), data, err)
 	return nil, num, err
@@ -295,21 +291,24 @@ func (tcp *Client) checkWaiterTimeout() {
 			return
 		default:
 		}
-		current := int64(time.Now().UnixNano() / 1000000)
-		tcp.waiterLock.Lock()
-		for msgId, v := range tcp.waiter  {
-			// check timeout
-			if current - v.time >= tcp.waiterGlobalTimeout {
-				log.Warnf("Client::keep, msgid=[%v] is timeout, will delete", msgId)
-				close(v.data)
-				delete(tcp.waiter, msgId)
-				//tcp.wg.Done()
-				// 这里为什么不能使用delWaiter的原因是
-				// tcp.waiterLock已加锁，而delWaiter内部也加了锁
-				// tcp.delWaiter(msgId)
-			}
-		}
-		tcp.waiterLock.Unlock()
+		tcp.waiterManager.clearTimeout()
+		//current := int64(time.Now().UnixNano() / 1000000)
+		//tcp.waiterLock.Lock()
+		//for msgId, v := range tcp.waiter  {
+		//	// check timeout
+		//	if current - v.time >= tcp.waiterGlobalTimeout {
+		//		log.Warnf("Client::keep, msgid=[%v] is timeout, will delete", msgId)
+		//		//close(v.data)
+		//		v.msgId = 0
+		//		v.onComplete = nil
+		//		delete(tcp.waiter, msgId)
+		//		//tcp.wg.Done()
+		//		// 这里为什么不能使用delWaiter的原因是
+		//		// tcp.waiterLock已加锁，而delWaiter内部也加了锁
+		//		// tcp.delWaiter(msgId)
+		//	}
+		//}
+		//tcp.waiterLock.Unlock()
 		//fmt.Println("#######################tcp.waiter len ", len(tcp.waiter))
 		time.Sleep(time.Second * 3)
 	}
@@ -391,16 +390,17 @@ func (tcp *Client) onMessage(msg []byte) {
 		}
 		// 1 is system id
 		if msgId > 1 {
-			tcp.waiterLock.RLock()
-			w, ok := tcp.waiter[msgId]
-			tcp.waiterLock.RUnlock()
-			data := w.encode(msgId, content)
-			if ok {
-				log.Infof("Client::onMessage write waiter, msgId=[%v], data=[%v, %v]", msgId, string(data), data)
-				w.data <- data
-			} else {
-				log.Errorf("Client::onMessage waiter not found, msgId=[%v]", msgId)
-			}
+			tcp.waiterManager.get(msgId).post(msgId, content)
+			//waiterLock.RLock()
+			//w, ok := tcp.waiter[msgId]
+			//tcp.waiterLock.RUnlock()
+			//data := w.encode(msgId, content)
+			//if ok {
+			//	log.Infof("Client::onMessage write waiter, msgId=[%v], data=[%v, %v]", msgId, string(content), content)
+			//	w.post(msgId, content)//data <- data
+			//} else {
+			//	log.Errorf("Client::onMessage waiter not found, msgId=[%v]", msgId)
+			//}
 		}
 		// 判断是否是心跳包，心跳包不触发回调函数
 		if !bytes.Equal(keepalivePackage, content) {
@@ -420,14 +420,17 @@ func (tcp *Client) disconnect() error {
 		return NotConnect
 	}
 
-	tcp.waiterLock.Lock()
-	for msgId, v := range tcp.waiter  {
-		log.Infof("disconnect, %v stop wait", msgId)
-		v.StopWait()
-		close(v.data)
-		delete(tcp.waiter, msgId)
-	}
-	tcp.waiterLock.Unlock()
+	//tcp.waiterLock.Lock()
+	//for msgId, v := range tcp.waiter  {
+	//	log.Infof("disconnect, %v stop wait", msgId)
+	//	v.StopWait()
+	//	v.onComplete = nil
+	//	v.msgId = 0
+	//	//close(v.data)
+	//	delete(tcp.waiter, msgId)
+	//}
+	//tcp.waiterLock.Unlock()
+	tcp.waiterManager.clearAll()
 	err := tcp.conn.Close()
 	if tcp.status & statusConnect > 0 {
 		tcp.status ^= statusConnect

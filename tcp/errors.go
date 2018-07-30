@@ -12,6 +12,7 @@ var (
 	WaitInterrupt = errors.New("wait interrupt")
 	WaiterNil     = errors.New("waiter is nil")
 	SendNotComplate     = errors.New("send not complete")
+	ErrPoolMaxSize = errors.New("pool max size")
 )
 
 type Error struct {
