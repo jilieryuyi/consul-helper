@@ -4,20 +4,25 @@ import (
 	"sync"
 	"time"
 	log "github.com/sirupsen/logrus"
+	"context"
 )
 
 type waiterManager struct {
 	waiter map[int64]*waiter
 	waiterLock *sync.RWMutex
 	waiterGlobalTimeout int64 // 毫秒
+	ctx context.Context
 }
 
-func newWaiterManager() *waiterManager {
-	return &waiterManager{
+func newWaiterManager(ctx context.Context) *waiterManager {
+	m := &waiterManager{
 		waiter:              make(map[int64]*waiter),
 		waiterLock:          new(sync.RWMutex),
 		waiterGlobalTimeout: defaultWaiterTimeout,
+		ctx:                 ctx,
 	}
+	go m.checkWaiterTimeout()
+	return m
 }
 
 func (m *waiterManager) append(wai *waiter) {
@@ -82,3 +87,34 @@ func (m *waiterManager) clearAll() {
 	}
 	m.waiterLock.Unlock()
 }
+
+func (m *waiterManager) checkWaiterTimeout() {
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
+		m.clearTimeout()
+		//current := int64(time.Now().UnixNano() / 1000000)
+		//tcp.waiterLock.Lock()
+		//for msgId, v := range tcp.waiter  {
+		//	// check timeout
+		//	if current - v.time >= tcp.waiterGlobalTimeout {
+		//		log.Warnf("Client::keep, msgid=[%v] is timeout, will delete", msgId)
+		//		//close(v.data)
+		//		v.msgId = 0
+		//		v.onComplete = nil
+		//		delete(tcp.waiter, msgId)
+		//		//tcp.wg.Done()
+		//		// 这里为什么不能使用delWaiter的原因是
+		//		// tcp.waiterLock已加锁，而delWaiter内部也加了锁
+		//		// tcp.delWaiter(msgId)
+		//	}
+		//}
+		//tcp.waiterLock.Unlock()
+		//fmt.Println("#######################tcp.waiter len ", len(tcp.waiter))
+		time.Sleep(time.Second * 3)
+	}
+}
+

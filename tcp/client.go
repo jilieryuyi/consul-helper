@@ -6,13 +6,9 @@ import (
 	"time"
 	"sync"
 	"context"
-	"sync/atomic"
 	"bytes"
 )
 
-var (
- 	globalMsgId int64 = 1
-)
 const (
 	statusConnect        = 1 << iota
 	MaxInt64             = int64(1) << 62
@@ -30,16 +26,14 @@ type Client struct {
 	onMessageCallback   []OnClientEventFunc
 	asyncWriteChan      chan []byte
 	coder               ICodec
-	//waiter              map[int64] *waiter
-	//waiterLock          *sync.RWMutex
 	waiterGlobalTimeout int64 //毫秒
 	wg                  *sync.WaitGroup
 	wgAsyncSend         *sync.WaitGroup
-	address string
-	connectTimeout time.Duration
-	cancel context.CancelFunc
-	waiterPool *waiterPool
-	waiterManager *waiterManager
+	address             string
+	connectTimeout      time.Duration
+	cancel              context.CancelFunc
+	waiterPool          *waiterPool
+	waiterManager       *waiterManager
 }
 
 type ClientOption      func(tcp *Client)
@@ -61,6 +55,7 @@ func SetCodec(coder ICodec) ClientOption {
 	}
 }
 
+// 设置连接超时
 func SetClientConnectTimeout(timeout time.Duration) ClientOption {
 	return func(tcp *Client) {
 		tcp.connectTimeout = timeout
@@ -100,15 +95,12 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 		ctx:                 ctx,
 		coder:               &Codec{},
 		bufferSize:          defaultBufferSize,
-		//waiter:              make(map[int64]*waiter),
-		//waiterLock:          new(sync.RWMutex),
-		//waiterGlobalTimeout: defaultWaiterTimeout,
 		wg:                  new(sync.WaitGroup),
 		wgAsyncSend:         new(sync.WaitGroup),
 		address:             address,
 		cancel:              cancel,
 		waiterPool:          newWaiterPool(1024),
-		waiterManager:       newWaiterManager(),
+		waiterManager:       newWaiterManager(ctx),
 	}
 	for _, f := range opts {
 		f(c)
@@ -121,19 +113,8 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 	}
 	go c.keepalive()
 	go c.asyncWriteProcess()
-	go c.checkWaiterTimeout()
 	go c.readMessage()
 	return c, nil
-}
-
-func (tcp *Client) getMsgId() int64 {
-	msgId := atomic.AddInt64(&globalMsgId, 1)
-	// check max msgId
-	if msgId > MaxInt64 {
-		atomic.StoreInt64(&globalMsgId, 1)
-		msgId = atomic.AddInt64(&globalMsgId, 1)
-	}
-	return msgId
 }
 
 // 异步发送消息
@@ -158,7 +139,7 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 		return nil, 0, NotConnect
 	}
 	// 获取消息id
-	msgId   := tcp.getMsgId()
+	msgId   := getMsgId()
 	sendMsg := tcp.coder.Encode(msgId, data)
 
 	// 设置写超时时间
@@ -180,9 +161,6 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 		return nil, 0, err
 	}
 	tcp.waiterManager.append(wai)
-	//tcp.waiterLock.Lock()
-	//tcp.waiter[wai.msgId] = wai
-	//tcp.waiterLock.Unlock()
 
 	// 发送消息
 	num, err := tcp.conn.Write(sendMsg)
@@ -228,7 +206,7 @@ func (tcp *Client) Write(data []byte, writeTimeout time.Duration) (int, error) {
 		defer tcp.conn.SetWriteDeadline(time.Time{})
 	}
 
-	msgId   := tcp.getMsgId()
+	msgId   := getMsgId()
 	sendMsg := tcp.coder.Encode(msgId, data)
 	num, err  := tcp.conn.Write(sendMsg)
 	// 判断消息是否发生完整
@@ -284,35 +262,35 @@ func (tcp *Client) asyncWriteProcess() {
 	}
 }
 
-func (tcp *Client) checkWaiterTimeout() {
-	for {
-		select {
-		case <-tcp.ctx.Done():
-			return
-		default:
-		}
-		tcp.waiterManager.clearTimeout()
-		//current := int64(time.Now().UnixNano() / 1000000)
-		//tcp.waiterLock.Lock()
-		//for msgId, v := range tcp.waiter  {
-		//	// check timeout
-		//	if current - v.time >= tcp.waiterGlobalTimeout {
-		//		log.Warnf("Client::keep, msgid=[%v] is timeout, will delete", msgId)
-		//		//close(v.data)
-		//		v.msgId = 0
-		//		v.onComplete = nil
-		//		delete(tcp.waiter, msgId)
-		//		//tcp.wg.Done()
-		//		// 这里为什么不能使用delWaiter的原因是
-		//		// tcp.waiterLock已加锁，而delWaiter内部也加了锁
-		//		// tcp.delWaiter(msgId)
-		//	}
-		//}
-		//tcp.waiterLock.Unlock()
-		//fmt.Println("#######################tcp.waiter len ", len(tcp.waiter))
-		time.Sleep(time.Second * 3)
-	}
-}
+//func (tcp *Client) checkWaiterTimeout() {
+//	for {
+//		select {
+//		case <-tcp.ctx.Done():
+//			return
+//		default:
+//		}
+//		tcp.waiterManager.clearTimeout()
+//		//current := int64(time.Now().UnixNano() / 1000000)
+//		//tcp.waiterLock.Lock()
+//		//for msgId, v := range tcp.waiter  {
+//		//	// check timeout
+//		//	if current - v.time >= tcp.waiterGlobalTimeout {
+//		//		log.Warnf("Client::keep, msgid=[%v] is timeout, will delete", msgId)
+//		//		//close(v.data)
+//		//		v.msgId = 0
+//		//		v.onComplete = nil
+//		//		delete(tcp.waiter, msgId)
+//		//		//tcp.wg.Done()
+//		//		// 这里为什么不能使用delWaiter的原因是
+//		//		// tcp.waiterLock已加锁，而delWaiter内部也加了锁
+//		//		// tcp.delWaiter(msgId)
+//		//	}
+//		//}
+//		//tcp.waiterLock.Unlock()
+//		//fmt.Println("#######################tcp.waiter len ", len(tcp.waiter))
+//		time.Sleep(time.Second * 3)
+//	}
+//}
 
 func (tcp *Client) readMessage() {
 	for {
@@ -391,16 +369,6 @@ func (tcp *Client) onMessage(msg []byte) {
 		// 1 is system id
 		if msgId > 1 {
 			tcp.waiterManager.get(msgId).post(msgId, content)
-			//waiterLock.RLock()
-			//w, ok := tcp.waiter[msgId]
-			//tcp.waiterLock.RUnlock()
-			//data := w.encode(msgId, content)
-			//if ok {
-			//	log.Infof("Client::onMessage write waiter, msgId=[%v], data=[%v, %v]", msgId, string(content), content)
-			//	w.post(msgId, content)//data <- data
-			//} else {
-			//	log.Errorf("Client::onMessage waiter not found, msgId=[%v]", msgId)
-			//}
 		}
 		// 判断是否是心跳包，心跳包不触发回调函数
 		if !bytes.Equal(keepalivePackage, content) {
@@ -412,6 +380,7 @@ func (tcp *Client) onMessage(msg []byte) {
 }
 
 func (tcp *Client) disconnect() error {
+	log.Infof("disconnect was called")
 	//tcp.wg.Wait()
 	// 等待异步发送全部发送完毕
 	tcp.wgAsyncSend.Wait()
