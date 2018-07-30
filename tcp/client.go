@@ -175,6 +175,7 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 		return wai, num, nil
 	}
 
+	log.Infof("Send clear %v", msgId)
 	// 如果发生了错误，不用返回waiter
 	// 这个时候直接关掉waiter
 	tcp.waiterManager.clear(msgId)

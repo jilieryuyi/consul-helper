@@ -35,6 +35,7 @@ func (m *waiterManager) append(wai *waiter) {
 }
 
 func (m *waiterManager) clear(msgId int64) {
+	log.Infof("clear %v", msgId)
 	if m == nil {
 		return
 	}
