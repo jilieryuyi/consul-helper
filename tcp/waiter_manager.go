@@ -43,7 +43,7 @@ func (m *waiterManager) clear(msgId int64) {
 	wai, ok := m.waiter[msgId]
 	if ok {
 		delete(m.waiter, msgId)
-		wai.StopWait()
+		//wai.StopWait()
 		wai.msgId = 0
 		wai.onComplete = nil
 	}
@@ -92,7 +92,7 @@ func (m *waiterManager) clearAll() {
 	m.waiterLock.Lock()
 	for msgId, v := range m.waiter  {
 		log.Infof("clearAll, %v stop wait", msgId)
-		v.StopWait()
+		//v.StopWait()
 		v.onComplete = nil
 		v.msgId = 0
 		delete(m.waiter, msgId)
