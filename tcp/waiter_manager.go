@@ -58,7 +58,7 @@ func (m *waiterManager) clearTimeout() {
 	for msgId, v := range m.waiter  {
 		// check timeout
 		if current - v.time >= m.waiterGlobalTimeout {
-			log.Warnf("Client::keep, msgid=[%v] is timeout, will delete", msgId)
+			log.Warnf("clearTimeout, msgid=[%v] is timeout, will delete", msgId)
 			//close(v.data)
 			delete(m.waiter, msgId)
 			v.msgId = 0
