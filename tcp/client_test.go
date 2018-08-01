@@ -6,49 +6,38 @@ import (
 	"time"
 	"bytes"
 	"math/rand"
-	"github.com/sirupsen/logrus"
 	"net"
+	"errors"
 )
-
-func NewTestServer(address string) *Server {
-	//address := "127.0.0.1:7771"
-	return NewServer(context.Background(), address, SetOnServerMessage(func(node *ClientNode, msgId int64, data []byte) {
-		logrus.Infof("server_test.go TestNewServer receive: msgId=%v, data=%v", msgId, string(data))
-		_, err := node.Send(msgId, data)
-		if err != nil {
-			logrus.Errorf("server_test.go TestNewServer line 32: %v", err)
-		}
-	}))
-}
-
+// 注意：运行以下测试之前先启动服务端 go run examples/server.go
+// 测试连续连接和关闭连接10000次，观看服务器和客户端是否正常
 // go test -v -test.run TestNewClient
 func TestNewClient(t *testing.T) {
 	address := "127.0.0.1:7771"
-	//server := NewTestServer(address)
-	//server.Start()
-	//defer server.Close()
-	//time.Sleep(time.Millisecond * 100)
 	go func() {
 		dial := net.Dialer{Timeout: time.Second * 3}
 		conn, err := dial.Dial("tcp", address)
 		if err == nil {
 			for {
 				// 这里发送一堆干扰数据包
-				conn.Write([]byte("你好曲儿个人感情如"))
+				// 这里报文没有按照规范进行封包
+				// 目的是为了测试服务端的解包容错性
+				conn.Write([]byte(RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(128))))
+				time.Sleep(time.Millisecond * 100)
 			}
 		}
 	}()
 	var (
-		res1  []byte
-	 	data1 []byte
+		res  []byte
+	 	data []byte
 	 	client *Client
-		times = 10
+		times = 10000
 		err error
-		errHappened = false
-		errStr = ""
 	)
 	for  i := 0; i < times; i++ {
-		client, err = NewClient(context.Background(), address,
+		client, err = NewClient(
+			context.Background(),
+			address,
 			SetClientConnectTimeout(time.Second * 3),
 			SetWaiterTimeout(1000 * 60),
 		)
@@ -56,63 +45,57 @@ func TestNewClient(t *testing.T) {
 			t.Errorf("NewClient error")
 			return
 		}
+		err = nil
 		for {
-			data1 = []byte(RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)))
-			if len(data1) <= 0 {
+			data = []byte(RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(128)))
+			if len(data) <= 0 {
 				break
 			}
-			w1, _, err := client.Send(data1, 0)
-			if err != nil || w1 == nil {
-				errStr = err.Error()
-				t.Errorf("server_test.go TestNewClient  %v", err)
-				errHappened = true
-				break
-			}
-			res1, _, err = w1.Wait(0)
+			wai, _, err := client.Send(data, 0)
 			if err != nil {
-				errStr = err.Error()
-				t.Errorf("server_test.go TestNewClient %v", err)
-				errHappened = true
+				t.Errorf("Send fail, err=[%v]", err)
 				break
 			}
-			logrus.Infof("server_test.go TestNewClient send data=[%v, %v]", string(data1), data1)
-			logrus.Infof("server_test.go TestNewClient return data=[%v, %v]", string(res1), res1)
-			if !bytes.Equal(data1, res1) {
-				errStr = "server_test.go TestNewClient error, send != return"
-				t.Errorf("server_test.go TestNewClient error, send != return")
-				errHappened = true
+			res, _, err = wai.Wait(0)
+			if err != nil {
+				t.Errorf("Wait fail, err=[%v]", err)
+				break
+			}
+			if !bytes.Equal(data, res) {
+				t.Errorf("send != return")
+				err = errors.New("send != return")
 				break
 			}
 			break
 		}
 		client.Close()
-		if errHappened {
-			t.Errorf(errStr)
+		if err != nil {
+			t.Errorf(err.Error())
 			return
 		}
 	}
 }
 
+// 注意：运行以下测试之前先启动服务端 go run examples/server.go
 // go test -v -test.run TestNewClient2
 func TestNewClient2(t *testing.T) {
 	address := "127.0.0.1:7771"
-	//server := NewTestServer(address)
-	//server.Start()
-	//defer server.Close()
-	//go func() {
-	//	dial := net.Dialer{Timeout: time.Second * 3}
-	//	conn, _ := dial.Dial("tcp", address)
-	//	for {
-	//		// 这里发送一堆干扰数据包
-	//		conn.Write([]byte("你好曲儿个人感情如"))
-	//	}
-	//}()
-	var (
-		times = 100
-	 	res1 []byte
-	 	data1 []byte
-	)
-	client, err := NewClient(context.Background(), address,
+	go func() {
+		dial := net.Dialer{Timeout: time.Second * 3}
+		conn, err := dial.Dial("tcp", address)
+		if err == nil {
+			for {
+				// 这里发送一堆干扰数据包
+				// 这里报文没有按照规范进行封包
+				// 目的是为了测试服务端的解包容错性
+				conn.Write([]byte(RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(128))))
+				time.Sleep(time.Millisecond * 100)
+			}
+		}
+	}()
+	client, err := NewClient(
+		context.Background(),
+		address,
 		SetClientConnectTimeout(time.Second * 3),
 		SetWaiterTimeout(1000 * 60),
 	)
@@ -121,25 +104,30 @@ func TestNewClient2(t *testing.T) {
 		return
 	}
 	defer client.Close()
+
+	var (
+		times = 10000
+		res []byte
+		data []byte
+	)
+
 	for  i := 0; i < times; i++ {
-		data1 = []byte(RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)))
-		if len(data1) <= 0 {
+		data = []byte(RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)))
+		if len(data) <= 0 {
 			continue
 		}
-		w1, _, err := client.Send(data1, 0)
-		if err != nil || w1 == nil {
-			t.Errorf("server_test.go TestNewClient  %v", err)
-			return
-		}
-		res1, _, err = w1.Wait(time.Second * 3)
+		wai, _, err := client.Send(data, 0)
 		if err != nil {
-			t.Errorf("server_test.go TestNewClient %v", err)
+			t.Errorf("Send fail, err=[%v]", err)
 			return
 		}
-		logrus.Infof("server_test.go TestNewClient send data=[%v]", string(data1))
-		logrus.Infof("server_test.go TestNewClient return data=[%v]", string(res1))
-		if !bytes.Equal(data1, res1) {
-			t.Errorf("server_test.go TestNewClient error, send != return")
+		res, _, err = wai.Wait(time.Second * 3)
+		if err != nil {
+			t.Errorf("Wait fail, err=[%v]", err)
+			return
+		}
+		if !bytes.Equal(data, res) {
+			t.Errorf("Equal fail, send != return")
 			return
 		}
 	}
