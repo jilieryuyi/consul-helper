@@ -24,22 +24,25 @@ func NewTestServer(address string) *Server {
 // go test -v -test.run TestNewClient
 func TestNewClient(t *testing.T) {
 	address := "127.0.0.1:7771"
-	server := NewTestServer(address)
-	server.Start()
-	defer server.Close()
+	//server := NewTestServer(address)
+	//server.Start()
+	//defer server.Close()
+	//time.Sleep(time.Millisecond * 100)
 	go func() {
 		dial := net.Dialer{Timeout: time.Second * 3}
-		conn, _ := dial.Dial("tcp", address)
-		for {
-			// 这里发送一堆干扰数据包
-			conn.Write([]byte("你好曲儿个人感情如"))
+		conn, err := dial.Dial("tcp", address)
+		if err == nil {
+			for {
+				// 这里发送一堆干扰数据包
+				conn.Write([]byte("你好曲儿个人感情如"))
+			}
 		}
 	}()
 	var (
 		res1  []byte
 	 	data1 []byte
 	 	client *Client
-		times = 100
+		times = 10
 		err error
 		errHappened = false
 		errStr = ""
@@ -93,9 +96,9 @@ func TestNewClient(t *testing.T) {
 // go test -v -test.run TestNewClient2
 func TestNewClient2(t *testing.T) {
 	address := "127.0.0.1:7771"
-	server := NewTestServer(address)
-	server.Start()
-	defer server.Close()
+	//server := NewTestServer(address)
+	//server.Start()
+	//defer server.Close()
 	//go func() {
 	//	dial := net.Dialer{Timeout: time.Second * 3}
 	//	conn, _ := dial.Dial("tcp", address)

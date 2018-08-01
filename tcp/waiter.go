@@ -126,3 +126,8 @@ func (w *waiter) post(msgId int64, content []byte) {
 	}
 	w.data <- w.encode(msgId, content)
 }
+
+func (w *waiter) reset() {
+	w.onComplete = nil
+	w.msgId = 0
+}

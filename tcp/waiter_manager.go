@@ -43,8 +43,7 @@ func (m *waiterManager) clear(msgId int64) {
 	wai, ok := m.waiter[msgId]
 	if ok {
 		delete(m.waiter, msgId)
-		wai.msgId = 0
-		wai.onComplete = nil
+		wai.reset()
 	}
 	m.waiterLock.Unlock()
 }
@@ -61,8 +60,7 @@ func (m *waiterManager) clearTimeout() {
 			log.Warnf("clearTimeout, msgid=[%v] is timeout, will delete", msgId)
 			//close(v.data)
 			delete(m.waiter, msgId)
-			v.msgId = 0
-			v.onComplete = nil
+			v.reset()
 			//tcp.wg.Done()
 			// 这里为什么不能使用delWaiter的原因是
 			// tcp.waiterLock已加锁，而delWaiter内部也加了锁
@@ -90,8 +88,7 @@ func (m *waiterManager) clearAll() {
 	m.waiterLock.Lock()
 	for msgId, v := range m.waiter  {
 		log.Infof("clearAll, %v stop wait", msgId)
-		v.onComplete = nil
-		v.msgId = 0
+		v.reset()
 		v.StopWait()
 		delete(m.waiter, msgId)
 	}
