@@ -34,6 +34,12 @@ func setOnMessage(f ...OnServerMessageFunc) NodeOption {
 	}
 }
 
+func setOnNodeClose(f NodeFunc) NodeOption {
+	return func(n *ClientNode) {
+		n.onclose = append(n.onclose, f)
+	}
+}
+
 func newNode(ctx context.Context, conn *net.Conn, codec ICodec, opts ...NodeOption) *ClientNode {
 	node := &ClientNode{
 		conn:              conn,
@@ -54,12 +60,6 @@ func newNode(ctx context.Context, conn *net.Conn, codec ICodec, opts ...NodeOpti
 	return node
 }
 
-func setOnNodeClose(f NodeFunc) NodeOption {
-	return func(n *ClientNode) {
-		n.onclose = append(n.onclose, f)
-	}
-}
-
 func (node *ClientNode) close() {
 	node.lock.Lock()
 	defer node.lock.Unlock()
@@ -71,7 +71,7 @@ func (node *ClientNode) close() {
 		(*node.conn).Close()
 		close(node.sendQueue)
 	}
-	log.Infof("node.go ClientNode::close, node close")
+	log.Infof("close, node close")
 	for _, f := range node.onclose {
 		f(node)
 	}
@@ -103,28 +103,28 @@ func (node *ClientNode) asyncSendService() {
 	defer node.wg.Done()
 	for {
 		if node.status & tcpNodeOnline <= 0 {
-			log.Info("node.go ClientNode::asyncSendService, tcp node is closed, clientSendService exit.")
+			log.Info("asyncSendService, tcp node is closed, clientSendService exit.")
 			return
 		}
 		select {
 		case msg, ok := <-node.sendQueue:
 			if !ok {
-				log.Info("node.go ClientNode::asyncSendService, tcp node sendQueue is closed, sendQueue channel closed.")
+				log.Info("asyncSendService, tcp node sendQueue is closed, sendQueue channel closed.")
 				return
 			}
 			size, err := (*node.conn).Write(msg)
 			if err != nil {
-				log.Errorf("node.go ClientNode::asyncSendService, tcp send to %s error: %v", (*node.conn).RemoteAddr().String(), err)
+				log.Errorf("asyncSendService, tcp send to %s error: %v", (*node.conn).RemoteAddr().String(), err)
 				node.close()
 				return
 			}
 			if size != len(msg) {
-				log.Errorf("node.go ClientNode::asyncSendService, %s send not complete: %v", (*node.conn).RemoteAddr().String(), msg)
+				log.Errorf("asyncSendService, %s send not complete: %v", (*node.conn).RemoteAddr().String(), msg)
 			}
 		case <- node.ctx.Done():
-			log.Debugf("node.go ClientNode::asyncSendService, context is closed, wait for exit, left: %d", len(node.sendQueue))
+			log.Debugf("asyncSendService, context is closed, wait for exit, left: %d", len(node.sendQueue))
 			if len(node.sendQueue) <= 0 {
-				log.Info("node.go ClientNode::asyncSendService, tcp service, clientSendService exit.")
+				log.Info("asyncSendService, tcp service, clientSendService exit.")
 				return
 			}
 		}
@@ -134,7 +134,7 @@ func (node *ClientNode) asyncSendService() {
 func (node *ClientNode) onMessage(msg []byte) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("node.go ClientNode::onMessage, Unpack recover##########%+v, %+v", err, node.recvBuf)
+			log.Errorf("onMessage, Unpack recover##########%+v, %+v", err, node.recvBuf)
 			node.recvBuf = make([]byte, 0)
 		}
 	}()
@@ -144,7 +144,7 @@ func (node *ClientNode) onMessage(msg []byte) {
 		msgId, content, pos, err := node.codec.Decode(node.recvBuf)
 		if err != nil {
 			node.recvBuf = make([]byte, 0)
-			log.Errorf("node.go ClientNode::onMessage, node.recvBuf error %v", err)
+			log.Errorf("onMessage, node.recvBuf error %v", err)
 			return
 		}
 		if msgId <= 0 {
@@ -154,7 +154,7 @@ func (node *ClientNode) onMessage(msg []byte) {
 			node.recvBuf = append(node.recvBuf[:0], node.recvBuf[pos:]...)
 		} else {
 			node.recvBuf = make([]byte, 0)
-			log.Errorf("node.go ClientNode::onMessage, pos %v(olen=%v) error, cmd=%v, content=%v(%v) len is %v, data is: %+v", pos, bufferLen, msgId, content, string(content), len(node.recvBuf), node.recvBuf)
+			log.Errorf("onMessage, pos %v(olen=%v) error, cmd=%v, content=%v(%v) len is %v, data is: %+v", pos, bufferLen, msgId, content, string(content), len(node.recvBuf), node.recvBuf)
 		}
 		for _, f := range node.onMessageCallback {
 			f(node, msgId, content)
@@ -171,7 +171,7 @@ func (node *ClientNode) readMessage() {
 			return
 		}
 		if err != nil && err != io.EOF {
-			log.Errorf("node.go ClientNode::readMessage, tcp node disconnect with error: %v, %v", (*node.conn).RemoteAddr().String(), err)
+			log.Errorf("readMessage, tcp node disconnect with error: %v, %v", (*node.conn).RemoteAddr().String(), err)
 			node.close()
 			return
 		}

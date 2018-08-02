@@ -17,5 +17,4 @@ func Test_Clients(t *testing.T) {
 	if len(client) != 0 {
 		t.Errorf("client error")
 	}
-
 }
