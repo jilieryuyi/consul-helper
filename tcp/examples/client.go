@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"errors"
 )
-const Times = 1000
+const Times = 10000000
 func TestClient1(sig chan struct{}) {
 	address := "127.0.0.1:7771"
 	go func() {

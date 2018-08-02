@@ -61,6 +61,7 @@ func (m *waiterManager) clearTimeout() {
 			//close(v.data)
 			delete(m.waiter, msgId)
 			v.reset()
+			v.StopWait()
 			//tcp.wg.Done()
 			// 这里为什么不能使用delWaiter的原因是
 			// tcp.waiterLock已加锁，而delWaiter内部也加了锁
