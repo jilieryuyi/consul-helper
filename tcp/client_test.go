@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"net"
 	"errors"
-	"fmt"
 )
 // 注意：运行以下测试之前先启动服务端 go run examples/server.go
 // 测试连续连接和关闭连接10000次，观看服务器和客户端是否正常
@@ -135,7 +134,7 @@ func TestNewClient2(t *testing.T) {
 }
 
 // 对于http客户端，所有的数据编码解码均原封不动直接返回
-type testCodec struct {}
+/*type testCodec struct {}
 func (t *testCodec) Encode(msgId int64, msg []byte) []byte {
 	return msg
 }
@@ -159,18 +158,6 @@ func TestNewClient3(t *testing.T) {
 	}
 	defer client.Close()
 	data := "GET / HTTP/1.1\r\n\r\n"// +
-		//"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8\r\n"+
-		//"User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36\r\n"+
-		//"Cookie: 1802_2127_61.141.73.50=1; Hm_lvt_d43149ee6d6eafc59af203cc8663df5b=1533166182; Hm_lpvt_d43149ee6d6eafc59af203cc8663df5b=1533166182; UM_distinctid=164f7d35e938e-07dcdd0d1d86b8-163b6952-fa000-164f7d35e94e5; CNZZDATA5439572=cnzz_eid%3D1575953544-1533165238-null%26ntime%3D1533165238; _ga=GA1.2.1156133700.1533166182; _gid=GA1.2.711269210.1533166182\r\n"+
-		//"Host: md.itlun.cn\r\n"+
-		//"If-Modified-Since: Mon, 14 May 2018 10:40:01 GMT\r\n"+
-		//"If-None-Match: W/\"5af96781-32c4\"\r\n"+
-		//"Upgrade-Insecure-Requests: 1\r\n"+
-		//"Accept-Encoding: gzip, deflate\r\n"+
-		//"Accept-Language: zh-CN,zh;q=0.9,en;q=0.8\r\n"+
-		//"Cache-Control: max-age=0\r\n"+
-		//"Connection: keep-alive\r\n"//+
-		//"\r\n"
 	wai, _, err := client.Send([]byte(data), time.Second * 6)
 	if err != nil {
 		t.Errorf("Send fail, error=[%v]", err)
@@ -182,4 +169,4 @@ func TestNewClient3(t *testing.T) {
 		t.Errorf("Wait fail, error=[%v]", err)
 		return
 	}
-}
+}*/

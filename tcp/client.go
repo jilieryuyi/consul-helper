@@ -298,7 +298,7 @@ func (tcp *Client) readMessage() {
 	//var header = make([]byte, 4)
 	//var packageLen = make([]byte, 4)
 	//var msgIdBuf = make([]byte, 8)
-	var frame = newPackage(&tcp.conn)
+	var frame = newPackage(tcp.conn)
 	for {
 		select {
 			case <-tcp.ctx.Done():

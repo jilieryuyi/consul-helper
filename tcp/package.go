@@ -2,7 +2,6 @@ package tcp
 
 import (
 	"io"
-	"net"
 	"bufio"
 	"encoding/binary"
 	"bytes"
@@ -22,8 +21,8 @@ const (
 	packageLen = 4
 	msgIdLen = 8
 )
-func newPackage(conn *net.Conn) *packageFrame {
-	rd := bufio.NewReader(*conn)
+func newPackage(conn io.Reader) *packageFrame {
+	rd := bufio.NewReader(conn)
 	return &packageFrame{
 		rd: rd,
 		header: make([]byte, headerLen),

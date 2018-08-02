@@ -131,7 +131,7 @@ func (node *ClientNode) asyncSendService() {
 }
 
 func (node *ClientNode) readMessage() {
-	var frame = newPackage(node.conn)
+	var frame = newPackage(*node.conn)
 	for {
 		content, msgId, err := frame.parse()
 		if  err != nil {
