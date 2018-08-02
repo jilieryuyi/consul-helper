@@ -10,10 +10,9 @@ import (
 func TestCodec_Encode(t *testing.T) {
 	msgId := int64(1)
 	data  := []byte("hello")
-	codec := NewCodec()
-	cc    := codec.Encode(msgId, data)
+	cc    := Encode(msgId, data)
 	fmt.Println(cc)
-	c, mid, err := codec.Decode(bytes.NewReader(cc))
+	mid, c, _ , err := Decode(cc)
 	fmt.Println(mid, c, err)
 	if err != nil {
 		t.Errorf(err.Error())
@@ -26,7 +25,7 @@ func TestCodec_Encode(t *testing.T) {
 	}
 
 	// 异常包解析
-	c, mid, err = codec.Decode(bytes.NewReader([]byte("你好")))
+	mid, c, _, err = Decode([]byte("你好"))
 	fmt.Println(mid, c, err)
 	// 返回的err不应该是nil
 	if err == nil {
@@ -42,7 +41,7 @@ func TestCodec_Encode(t *testing.T) {
 	}
 
 	// 异常包解析
-	c, mid, err = codec.Decode(bytes.NewReader(nil))
+	mid, c, _, err = Decode(nil)
 	fmt.Println(mid, c, err)
 	// 返回的err不应该是nil
 	if err == nil {
@@ -58,7 +57,7 @@ func TestCodec_Encode(t *testing.T) {
 	}
 
 	// 异常包解析
-	c, mid, err = codec.Decode(nil)
+	mid, c, _, err = Decode(nil)
 	fmt.Println(mid, c, err)
 	// 返回的err不应该是nil
 	if err == nil {

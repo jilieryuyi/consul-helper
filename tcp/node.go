@@ -24,7 +24,6 @@ type ClientNode struct {
 	onclose           []NodeFunc
 	ctx               context.Context
 	onMessageCallback []OnServerMessageFunc
-	codec             ICodec
 }
 
 func setOnMessage(f ...OnServerMessageFunc) NodeOption {
@@ -39,7 +38,7 @@ func setOnNodeClose(f NodeFunc) NodeOption {
 	}
 }
 
-func newNode(ctx context.Context, conn *net.Conn, codec ICodec, opts ...NodeOption) *ClientNode {
+func newNode(ctx context.Context, conn *net.Conn, opts ...NodeOption) *ClientNode {
 	node := &ClientNode{
 		conn:              conn,
 		sendQueue:         make(chan []byte, tcpMaxSendQueue),
@@ -50,7 +49,6 @@ func newNode(ctx context.Context, conn *net.Conn, codec ICodec, opts ...NodeOpti
 		onclose:           make([]NodeFunc, 0),
 		wg:                new(sync.WaitGroup),
 		onMessageCallback: make([]OnServerMessageFunc, 0),
-		codec:             codec,
 	}
 	for _, f := range opts {
 		f(node)
@@ -77,7 +75,7 @@ func (node *ClientNode) close() {
 }
 
 func (node *ClientNode) Send(msgId int64, data []byte) (int, error) {
-	sendData := node.codec.Encode(msgId, data)
+	sendData := Encode(msgId, data)
 	n, e := (*node.conn).Write(sendData)
 	if e != nil {
 		return n, e
@@ -94,7 +92,7 @@ func (node *ClientNode) AsyncSend(msgId int64, data []byte) {
 	if node.status & tcpNodeOnline <= 0 {
 		return
 	}
-	node.sendQueue <- node.codec.Encode(msgId, data)
+	node.sendQueue <- Encode(msgId, data)
 }
 
 func (node *ClientNode) asyncSendService() {
@@ -131,9 +129,9 @@ func (node *ClientNode) asyncSendService() {
 }
 
 func (node *ClientNode) readMessage() {
-	//var frame = newPackage(*node.conn)
+	var frame = newPackage(*node.conn)
 	for {
-		content, msgId, err := node.codec.Decode(*node.conn)
+		content, msgId, err := frame.parse()
 		if  err != nil {
 			log.Errorf("readMessage fail, client host=[%v], err=[%v]", (*node.conn).RemoteAddr().String(), err)
 			node.close()

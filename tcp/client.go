@@ -25,7 +25,6 @@ type Client struct {
 	status              int
 	onMessageCallback   []OnClientEventFunc
 	asyncWriteChan      chan []byte
-	coder               ICodec
 	waiterGlobalTimeout int64 //毫秒
 	wg                  *sync.WaitGroup
 	wgAsyncSend         *sync.WaitGroup
@@ -45,13 +44,6 @@ type OnConnectFunc     func(tcp *Client)
 func SetOnMessage(f ...OnClientEventFunc) ClientOption {
 	return func(tcp *Client) {
 		tcp.onMessageCallback = append(tcp.onMessageCallback, f...)
-	}
-}
-
-// 用来设置编码解码的接口
-func SetCodec(coder ICodec) ClientOption {
-	return func(tcp *Client) {
-		tcp.coder = coder
 	}
 }
 
@@ -93,7 +85,6 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 		onMessageCallback:   make([]OnClientEventFunc, 0),
 		asyncWriteChan:      make(chan []byte, asyncWriteChanLen),
 		ctx:                 ctx,
-		coder:               NewCodec(),
 		bufferSize:          defaultBufferSize,
 		wg:                  new(sync.WaitGroup),
 		wgAsyncSend:         new(sync.WaitGroup),
@@ -140,7 +131,7 @@ func (tcp *Client) Send(data []byte, writeTimeout time.Duration) (*waiter, int, 
 	}
 	// 获取消息id
 	msgId   := getMsgId()
-	sendMsg := tcp.coder.Encode(msgId, data)
+	sendMsg := Encode(msgId, data)
 
 	// 设置写超时时间
 	if writeTimeout > 0 {
@@ -208,7 +199,7 @@ func (tcp *Client) Write(data []byte, writeTimeout time.Duration) (int, error) {
 	}
 
 	msgId   := getMsgId()
-	sendMsg := tcp.coder.Encode(msgId, data)
+	sendMsg := Encode(msgId, data)
 	num, err  := tcp.conn.Write(sendMsg)
 	// 判断消息是否发生完整
 	if num != len(sendMsg) {
@@ -237,7 +228,7 @@ func (tcp *Client) keepalive() {
 			time.Sleep(time.Second * 3)
 			continue
 		}
-		tcp.conn.Write(tcp.coder.Encode(1, keepalivePackage))
+		tcp.conn.Write(Encode(1, keepalivePackage))
 		//tcp.Write(keepalivePackage)
 		time.Sleep(time.Second * 3)
 	}
@@ -268,7 +259,7 @@ func (tcp *Client) readMessage() {
 	//var header = make([]byte, 4)
 	//var packageLen = make([]byte, 4)
 	//var msgIdBuf = make([]byte, 8)
-	//var frame = newPackage(tcp.conn)
+	var frame = newPackage(tcp.conn)
 	for {
 		select {
 			case <-tcp.ctx.Done():
@@ -282,7 +273,7 @@ func (tcp *Client) readMessage() {
 			continue
 		}
 
-		content, msgId, err := tcp.coder.Decode(tcp.conn)//frame.parse()
+		content, msgId, err := frame.parse()
 		if err != nil {
 			log.Errorf("readMessage header fail, err=[%v]", err)
 			tcp.disconnect()

@@ -19,7 +19,6 @@ type Server struct {
 	buffer            []byte
 	ctx               context.Context
 	onMessageCallback []OnServerMessageFunc
-	codec             ICodec
 	cancel            context.CancelFunc
 }
 type Clients             []*ClientNode
@@ -36,14 +35,6 @@ var keepalivePackage     = []byte{
 func SetOnServerMessage(f ...OnServerMessageFunc) ServerOption {
 	return func(s *Server) {
 		s.onMessageCallback = append(s.onMessageCallback, f...)
-	}
-}
-
-// set codec, codes use for encode and descode msg
-// codec must implement from ICodec
-func SetServerCodec(codec ICodec) ServerOption {
-	return func(s *Server) {
-		s.codec = codec
 	}
 }
 
@@ -66,7 +57,6 @@ func NewServer(c context.Context, address string, opts ...ServerOption) *Server 
 		status:            0,
 		buffer:            make([]byte, 0),
 		onMessageCallback: make([]OnServerMessageFunc, 0),
-		codec:             NewCodec(),
 		cancel:            cancel,
 	}
 	go tcp.keepalive()
@@ -103,7 +93,6 @@ func (tcp *Server) Start() {
 			node := newNode(
 				tcp.ctx,
 				&conn,
-				tcp.codec,
 				setOnNodeClose(func(n *ClientNode) {
 					tcp.lock.Lock()
 					tcp.clients.remove(n)
