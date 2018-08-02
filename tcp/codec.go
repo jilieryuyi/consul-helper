@@ -39,7 +39,7 @@ func Encode(msgId int64, msg []byte) []byte {
 // 第二个返回值是读取了的包长度
 func Decode(data []byte) (int64, []byte, int, error) {
 	if data == nil || len(data) == 0 {
-		return 0, nil, 0, nil
+		return 0, nil, 0, InvalidPackage
 	}
 	startPos := 4
 	if !bytes.Equal(data[:4], PackageHeader) {
