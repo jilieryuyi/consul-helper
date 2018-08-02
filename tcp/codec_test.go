@@ -10,11 +10,11 @@ import (
 func TestCodec_Encode(t *testing.T) {
 	msgId := int64(1)
 	data  := []byte("hello")
-	codec := &Codec{}
+	codec := NewCodec()
 	cc    := codec.Encode(msgId, data)
 	fmt.Println(cc)
-	mid, c, p, err := codec.Decode(cc)
-	fmt.Println(mid, c, p, err)
+	c, mid, err := codec.Decode(bytes.NewReader(cc))
+	fmt.Println(mid, c, err)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -25,55 +25,51 @@ func TestCodec_Encode(t *testing.T) {
 		t.Error("error 2")
 	}
 
-
-	content := make([]byte, 0)
-	content = append(content, []byte("你好")...)
-	content = append(content, cc...)
-	content = append(content, []byte("你好")...)
-	content = append(content, cc...)
-	content = append(content, []byte("qwrqwerfq34wfq")...)
-
-	mid, c, p, err = codec.Decode(content)
-	fmt.Println(mid, c, p, err)
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	if mid != msgId {
-		t.Error("error")
-	}
-
-	if !bytes.Equal(c, data) {
-		t.Error("error 2")
-	}
-
-	content = append(content[:0], content[p:]...)
-
-	mid, c, p, err = codec.Decode(content)
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	if mid != msgId {
-		t.Error("error")
-	}
-
-	if !bytes.Equal(c, data) {
-		t.Error("error 2")
-	}
-
-	content = append(content[:0], content[p:]...)
-
-
-	mid, c, p, err = codec.Decode(content)
-	fmt.Println(mid, c, p, err)
+	// 异常包解析
+	c, mid, err = codec.Decode(bytes.NewReader([]byte("你好")))
+	fmt.Println(mid, c, err)
+	// 返回的err不应该是nil
 	if err == nil {
-		t.Errorf("error")
+		t.Errorf("decode fail")
 	}
+	// 消息id不应该相等
 	if mid == msgId {
-		t.Error("error")
+		t.Error("decode")
 	}
-
-	if bytes.Equal(c, data) {
+	// 解析内容
+	if bytes.Equal(c, []byte("你好")) {
 		t.Error("error 2")
 	}
 
+	// 异常包解析
+	c, mid, err = codec.Decode(bytes.NewReader(nil))
+	fmt.Println(mid, c, err)
+	// 返回的err不应该是nil
+	if err == nil {
+		t.Errorf("decode fail")
+	}
+	// 消息id不应该相等
+	if mid == msgId {
+		t.Error("decode")
+	}
+	// 解析内容
+	if !bytes.Equal(c, nil) {
+		t.Error("error 2")
+	}
+
+	// 异常包解析
+	c, mid, err = codec.Decode(nil)
+	fmt.Println(mid, c, err)
+	// 返回的err不应该是nil
+	if err == nil {
+		t.Errorf("decode fail")
+	}
+	// 消息id不应该相等
+	if mid == msgId {
+		t.Error("decode")
+	}
+	// 解析内容
+	if !bytes.Equal(c, nil) {
+		t.Error("error 2")
+	}
 }

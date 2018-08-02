@@ -93,7 +93,7 @@ func NewClient(ctx context.Context, address string, opts ...ClientOption) (*Clie
 		onMessageCallback:   make([]OnClientEventFunc, 0),
 		asyncWriteChan:      make(chan []byte, asyncWriteChanLen),
 		ctx:                 ctx,
-		coder:               &Codec{},
+		coder:               NewCodec(),
 		bufferSize:          defaultBufferSize,
 		wg:                  new(sync.WaitGroup),
 		wgAsyncSend:         new(sync.WaitGroup),
@@ -263,42 +263,12 @@ func (tcp *Client) asyncWriteProcess() {
 	}
 }
 
-//func (tcp *Client) checkWaiterTimeout() {
-//	for {
-//		select {
-//		case <-tcp.ctx.Done():
-//			return
-//		default:
-//		}
-//		tcp.waiterManager.clearTimeout()
-//		//current := int64(time.Now().UnixNano() / 1000000)
-//		//tcp.waiterLock.Lock()
-//		//for msgId, v := range tcp.waiter  {
-//		//	// check timeout
-//		//	if current - v.time >= tcp.waiterGlobalTimeout {
-//		//		log.Warnf("Client::keep, msgid=[%v] is timeout, will delete", msgId)
-//		//		//close(v.data)
-//		//		v.msgId = 0
-//		//		v.onComplete = nil
-//		//		delete(tcp.waiter, msgId)
-//		//		//tcp.wg.Done()
-//		//		// 这里为什么不能使用delWaiter的原因是
-//		//		// tcp.waiterLock已加锁，而delWaiter内部也加了锁
-//		//		// tcp.delWaiter(msgId)
-//		//	}
-//		//}
-//		//tcp.waiterLock.Unlock()
-//		//fmt.Println("#######################tcp.waiter len ", len(tcp.waiter))
-//		time.Sleep(time.Second * 3)
-//	}
-//}
-
 func (tcp *Client) readMessage() {
 	//var bio = bufio.NewReader(tcp.conn)
 	//var header = make([]byte, 4)
 	//var packageLen = make([]byte, 4)
 	//var msgIdBuf = make([]byte, 8)
-	var frame = newPackage(tcp.conn)
+	//var frame = newPackage(tcp.conn)
 	for {
 		select {
 			case <-tcp.ctx.Done():
@@ -312,7 +282,7 @@ func (tcp *Client) readMessage() {
 			continue
 		}
 
-		content, msgId, err := frame.parse()
+		content, msgId, err := tcp.coder.Decode(tcp.conn)//frame.parse()
 		if err != nil {
 			log.Errorf("readMessage header fail, err=[%v]", err)
 			tcp.disconnect()

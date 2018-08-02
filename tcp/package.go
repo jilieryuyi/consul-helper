@@ -16,6 +16,7 @@ type packageFrame struct {
 }
 var ErrReadNotComplete = errors.New("read not complete")
 var ErrInvalidHeader = errors.New("invalid package header")
+var ErrReaderNil = errors.New("reader is nil")
 const (
 	headerLen = 4
 	packageLen = 4
@@ -29,6 +30,11 @@ func newPackage(conn io.Reader) *packageFrame {
 		packageLen: make([]byte, packageLen),
 		msgId: make([]byte, msgIdLen),
 	}
+}
+
+func (p *packageFrame) reset(rd io.Reader) *packageFrame {
+	p.rd = rd
+	return p
 }
 
 func (p *packageFrame) readHeader() error {
@@ -84,6 +90,9 @@ func (p *packageFrame) readContent(clen int) ([]byte, error) {
 
 
 func (p *packageFrame) parse() ([]byte, int64, error)  {
+	if p.rd == nil {
+		return nil, 0, ErrReaderNil
+	}
 	err := p.readHeader()
 	if err != nil {
 		return nil, 0, err

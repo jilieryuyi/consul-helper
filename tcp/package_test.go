@@ -9,7 +9,7 @@ import (
 func TestNewPackage(t *testing.T) {
 	msgId := int64(1)
 	data  := []byte("hello")
-	codec := &Codec{}
+	codec := NewCodec()
 	cc    := codec.Encode(msgId, data)
 	rd    := bytes.NewReader(cc)
 	frame := newPackage(rd)

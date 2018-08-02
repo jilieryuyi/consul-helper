@@ -9,11 +9,8 @@ import (
 	"context"
 	"github.com/sirupsen/logrus"
 	"errors"
-	"os"
-	"os/signal"
-	"syscall"
 )
-const Times = 100000000
+const Times = 1000
 func TestClient1(sig chan struct{}) {
 	address := "127.0.0.1:7771"
 	go func() {
@@ -35,7 +32,7 @@ func TestClient1(sig chan struct{}) {
 		}
 	}()
 	defer func() {
-		sig <-struct {}{}
+		close(sig)// <-struct {}{}
 	}()
 	var (
 		res  []byte
@@ -110,7 +107,7 @@ func TestClient2(sig chan struct{}) {
 		}
 	}()
 	defer func() {
-		sig <- struct{}{}
+		close(sig)// <- struct{}{}
 	}()
 	client, err := tcp.NewClient(
 		context.Background(),
@@ -164,15 +161,15 @@ func main() {
 	go TestClient1(sig1)
 	go TestClient2(sig2)
 
-	//<- sig1
-	//<- sig2
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc,
-		os.Kill,
-		os.Interrupt,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-	<-sc
+	<- sig1
+	<- sig2
+	//sc := make(chan os.Signal, 1)
+	//signal.Notify(sc,
+	//	os.Kill,
+	//	os.Interrupt,
+	//	syscall.SIGHUP,
+	//	syscall.SIGINT,
+	//	syscall.SIGTERM,
+	//	syscall.SIGQUIT)
+	//<-sc
 }

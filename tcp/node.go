@@ -131,9 +131,9 @@ func (node *ClientNode) asyncSendService() {
 }
 
 func (node *ClientNode) readMessage() {
-	var frame = newPackage(*node.conn)
+	//var frame = newPackage(*node.conn)
 	for {
-		content, msgId, err := frame.parse()
+		content, msgId, err := node.codec.Decode(*node.conn)
 		if  err != nil {
 			log.Errorf("readMessage fail, client host=[%v], err=[%v]", (*node.conn).RemoteAddr().String(), err)
 			node.close()

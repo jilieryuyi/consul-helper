@@ -66,7 +66,7 @@ func NewServer(c context.Context, address string, opts ...ServerOption) *Server 
 		status:            0,
 		buffer:            make([]byte, 0),
 		onMessageCallback: make([]OnServerMessageFunc, 0),
-		codec:             &Codec{},
+		codec:             NewCodec(),
 		cancel:            cancel,
 	}
 	go tcp.keepalive()

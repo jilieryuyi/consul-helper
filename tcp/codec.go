@@ -2,9 +2,7 @@ package tcp
 
 import (
 	"encoding/binary"
-	"errors"
-	"github.com/sirupsen/logrus"
-	"bytes"
+	"io"
 )
 
 const (
@@ -12,16 +10,26 @@ const (
 	PackageMinLength = 16
 )
 var (
-	MaxPackError = errors.New("package len max then limit")
-	InvalidPackage = errors.New("invalid package")
+	//MaxPackError = errors.New("package len max then limit")
+	//InvalidPackage = errors.New("invalid package")
 	PackageHeader = []byte{255, 255, 255, 255}
 )
 
 type ICodec interface {
 	Encode(msgId int64, msg []byte) []byte
-	Decode(data []byte) (int64, []byte, int, error)
+	//Decode(data []byte) (int64, []byte, int, error)
+	Decode(rd io.Reader) ([]byte, int64, error)
 }
-type Codec struct {}
+type Codec struct {
+	frame *packageFrame
+}
+
+func NewCodec() ICodec {
+	frame := newPackage(nil)
+	return &Codec{
+		frame: frame,
+	}
+}
 
 func (c Codec) Encode(msgId int64, msg []byte) []byte {
 	// 为了增强容错性，这里加入4字节的header支持
@@ -43,7 +51,7 @@ func (c Codec) Encode(msgId int64, msg []byte) []byte {
 
 // 这里的第一个返回值是解包之后的实际报内容
 // 第二个返回值是读取了的包长度
-func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
+/*func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
 	if data == nil || len(data) == 0 {
 		return 0, nil, 0, nil
 	}
@@ -71,5 +79,9 @@ func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
 	content := make([]byte, len(data[startPos+12 : startPos + clen + 12 ]))
 	copy(content, data[startPos+12 : startPos + clen + 12])
 	return msgId, content, startPos + clen + 12, nil
+}
+*/
+func (c Codec) Decode(rd io.Reader) ([]byte, int64, error) {
+	return c.frame.reset(rd).parse()
 }
 
