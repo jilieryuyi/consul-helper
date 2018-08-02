@@ -13,7 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 )
-const Times = 10000
+const Times = 100000000
 func TestClient1(sig chan struct{}) {
 	address := "127.0.0.1:7771"
 	go func() {
@@ -25,9 +25,9 @@ func TestClient1(sig chan struct{}) {
 					case <- sig:
 						return
 					default:
-				// 这里发送一堆干扰数据包
-				// 这里报文没有按照规范进行封包
-				// 目的是为了测试服务端的解包容错性
+					// 这里发送一堆干扰数据包
+					// 这里报文没有按照规范进行封包
+					// 目的是为了测试服务端的解包容错性
 					conn.Write([]byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(128))))
 					time.Sleep(time.Millisecond * 100)
 				}
@@ -100,9 +100,9 @@ func TestClient2(sig chan struct{}) {
 				case <- sig:
 					return
 				default:
-				// 这里发送一堆干扰数据包
-				// 这里报文没有按照规范进行封包
-				// 目的是为了测试服务端的解包容错性
+					// 这里发送一堆干扰数据包
+					// 这里报文没有按照规范进行封包
+					// 目的是为了测试服务端的解包容错性
 					conn.Write([]byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(128))))
 					time.Sleep(time.Millisecond * 100)
 				}
