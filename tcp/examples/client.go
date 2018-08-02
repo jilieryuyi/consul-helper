@@ -9,8 +9,11 @@ import (
 	"context"
 	"github.com/sirupsen/logrus"
 	"errors"
+	"os"
+	"os/signal"
+	"syscall"
 )
-
+const Times = 10000
 func TestClient1(sig chan struct{}) {
 	address := "127.0.0.1:7771"
 	go func() {
@@ -38,10 +41,10 @@ func TestClient1(sig chan struct{}) {
 		res  []byte
 		data []byte
 		client *tcp.Client
-		times = 100000
+		//times = 100
 		err error
 	)
-	for  i := 0; i < times; i++ {
+	for  i := 0; i < Times; i++ {
 		client, err = tcp.NewClient(
 			context.Background(),
 			address,
@@ -68,6 +71,7 @@ func TestClient1(sig chan struct{}) {
 				logrus.Errorf("Wait fail, err=[%v]", err)
 				break
 			}
+			logrus.Infof("receive=[%v]", string(res))
 			if !bytes.Equal(data, res) {
 				logrus.Errorf("send != return")
 				err = errors.New("send != return")
@@ -121,12 +125,12 @@ func TestClient2(sig chan struct{}) {
 	defer client.Close()
 
 	var (
-		times = 100000
+		//times = 100
 		res []byte
 		data []byte
 	)
 
-	for  i := 0; i < times; i++ {
+	for  i := 0; i < Times; i++ {
 		data = []byte(tcp.RandString(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(1024)))
 		if len(data) <= 0 {
 			continue
@@ -141,6 +145,7 @@ func TestClient2(sig chan struct{}) {
 			logrus.Errorf("Wait fail, err=[%v]", err)
 			return
 		}
+		logrus.Infof("receive=[%v]", string(res))
 		if !bytes.Equal(data, res) {
 			logrus.Errorf("Equal fail, send != return")
 			return
@@ -159,6 +164,15 @@ func main() {
 	go TestClient1(sig1)
 	go TestClient2(sig2)
 
-	<- sig1
-	<- sig2
+	//<- sig1
+	//<- sig2
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc,
+		os.Kill,
+		os.Interrupt,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+	<-sc
 }

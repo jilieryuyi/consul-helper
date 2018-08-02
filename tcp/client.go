@@ -294,6 +294,11 @@ func (tcp *Client) asyncWriteProcess() {
 //}
 
 func (tcp *Client) readMessage() {
+	//var bio = bufio.NewReader(tcp.conn)
+	//var header = make([]byte, 4)
+	//var packageLen = make([]byte, 4)
+	//var msgIdBuf = make([]byte, 8)
+	var frame = newPackage(&tcp.conn)
 	for {
 		select {
 			case <-tcp.ctx.Done():
@@ -306,67 +311,14 @@ func (tcp *Client) readMessage() {
 			time.Sleep(time.Millisecond * 100)
 			continue
 		}
-		readBuffer := make([]byte, tcp.bufferSize)
-		size, err  := tcp.conn.Read(readBuffer)
 
-		// 网络断开错误
-		//if isClosedConnError(err) {
-		//	tcp.disconnect()
-		//	continue
-		//}
-		// 读取错误
-		if err != nil || size <= 0 {
-			log.Errorf("Client::readMessage fail, err=[%+v]", err)
+		content, msgId, err := frame.parse()
+		if err != nil {
+			log.Errorf("readMessage header fail, err=[%v]", err)
 			tcp.disconnect()
 			continue
 		}
-		tcp.onMessage(readBuffer[:size])
-	}
-}
 
-// use like go tcp.Connect()
-func (tcp *Client) connect() error {
-	// 如果已经连接，直接返回
-	if tcp.status & statusConnect > 0 {
-		return IsConnected
-	}
-	dial := net.Dialer{Timeout: tcp.connectTimeout}
-	conn, err := dial.Dial("tcp", tcp.address)
-	if err != nil {
-		log.Errorf("Client::Connect Dial fail, err=[%+v]", err)
-		return err
-	}
-	tcp.conn = conn
-	tcp.status |= statusConnect
-	return nil
-}
-
-func (tcp *Client) onMessage(msg []byte) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Errorf("Client::onMessage recover, err=[%+v], buffer=[%+v, %+v]", err, string(tcp.buffer), tcp.buffer)
-			tcp.buffer = make([]byte, 0)
-		}
-	}()
-	tcp.buffer = append(tcp.buffer, msg...)
-	for {
-		bufferLen := len(tcp.buffer)
-		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
-		log.Infof("client.go Client::onMessage, client receive: msgId=[%v], data=[%v, %v]", msgId, string(content), content)
-		if err != nil {
-			log.Errorf("Client::onMessage coder Decode fail, err=[%v]", err)
-			tcp.buffer = make([]byte, 0)
-			return
-		}
-		if msgId <= 0  {
-			return
-		}
-		if len(tcp.buffer) >= pos {
-			tcp.buffer = append(tcp.buffer[:0], tcp.buffer[pos:]...)
-		} else {
-			tcp.buffer = make([]byte, 0)
-			log.Errorf("Client::onMessage pos error, pos=[%v], bufferLen=[%v], content=[(%v) %v], buffer=[(%+v) %v", pos, bufferLen, string(content), content, len(tcp.buffer), tcp.buffer)
-		}
 		// 1 is system id
 		if msgId > 1 {
 			tcp.waiterManager.get(msgId).post(msgId, content)
@@ -379,6 +331,62 @@ func (tcp *Client) onMessage(msg []byte) {
 		}
 	}
 }
+
+// use like go tcp.Connect()
+func (tcp *Client) connect() error {
+	// 如果已经连接，直接返回
+	if tcp.status & statusConnect > 0 {
+		return IsConnected
+	}
+	dial := net.Dialer{Timeout: tcp.connectTimeout}
+	conn, err := dial.Dial("tcp", tcp.address)
+	if err != nil {
+		log.Errorf("Connect Dial fail, err=[%+v]", err)
+		return err
+	}
+	tcp.conn = conn
+	tcp.status |= statusConnect
+	return nil
+}
+
+//func (tcp *Client) onMessage(msg []byte) {
+//	defer func() {
+//		if err := recover(); err != nil {
+//			log.Errorf("Client::onMessage recover, err=[%+v], buffer=[%+v, %+v]", err, string(tcp.buffer), tcp.buffer)
+//			tcp.buffer = make([]byte, 0)
+//		}
+//	}()
+//	tcp.buffer = append(tcp.buffer, msg...)
+//	for {
+//		bufferLen := len(tcp.buffer)
+//		msgId, content, pos, err := tcp.coder.Decode(tcp.buffer)
+//		log.Infof("client.go Client::onMessage, client receive: msgId=[%v], data=[%v, %v]", msgId, string(content), content)
+//		if err != nil {
+//			log.Errorf("Client::onMessage coder Decode fail, err=[%v]", err)
+//			tcp.buffer = make([]byte, 0)
+//			return
+//		}
+//		if msgId <= 0  {
+//			return
+//		}
+//		if len(tcp.buffer) >= pos {
+//			tcp.buffer = append(tcp.buffer[:0], tcp.buffer[pos:]...)
+//		} else {
+//			tcp.buffer = make([]byte, 0)
+//			log.Errorf("Client::onMessage pos error, pos=[%v], bufferLen=[%v], content=[(%v) %v], buffer=[(%+v) %v", pos, bufferLen, string(content), content, len(tcp.buffer), tcp.buffer)
+//		}
+//		// 1 is system id
+//		if msgId > 1 {
+//			tcp.waiterManager.get(msgId).post(msgId, content)
+//		}
+//		// 判断是否是心跳包，心跳包不触发回调函数
+//		if !bytes.Equal(keepalivePackage, content) {
+//			for _, f := range tcp.onMessageCallback {
+//				f(tcp, content)
+//			}
+//		}
+//	}
+//}
 
 func (tcp *Client) disconnect() error {
 	log.Infof("disconnect was called")

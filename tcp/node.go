@@ -4,7 +4,6 @@ import (
 	"net"
 	log "github.com/sirupsen/logrus"
 	"sync"
-	"io"
 	"context"
 )
 
@@ -131,51 +130,18 @@ func (node *ClientNode) asyncSendService() {
 	}
 }
 
-func (node *ClientNode) onMessage(msg []byte) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Errorf("onMessage, Unpack recover##########%+v, %+v", err, node.recvBuf)
-			node.recvBuf = make([]byte, 0)
-		}
-	}()
-	node.recvBuf = append(node.recvBuf, msg...)
+func (node *ClientNode) readMessage() {
+	var frame = newPackage(node.conn)
 	for {
-		bufferLen := len(node.recvBuf)
-		msgId, content, pos, err := node.codec.Decode(node.recvBuf)
-		if err != nil {
-			node.recvBuf = make([]byte, 0)
-			log.Errorf("onMessage, node.recvBuf error %v", err)
+		content, msgId, err := frame.parse()
+		if  err != nil {
+			log.Errorf("readMessage fail, client host=[%v], err=[%v]", (*node.conn).RemoteAddr().String(), err)
+			node.close()
 			return
-		}
-		if msgId <= 0 {
-			return
-		}
-		if len(node.recvBuf) >= pos {
-			node.recvBuf = append(node.recvBuf[:0], node.recvBuf[pos:]...)
-		} else {
-			node.recvBuf = make([]byte, 0)
-			log.Errorf("onMessage, pos %v(olen=%v) error, cmd=%v, content=%v(%v) len is %v, data is: %+v", pos, bufferLen, msgId, content, string(content), len(node.recvBuf), node.recvBuf)
 		}
 		for _, f := range node.onMessageCallback {
 			f(node, msgId, content)
 		}
-	}
-}
-
-func (node *ClientNode) readMessage() {
-	for {
-		readBuffer := make([]byte, 4096)
-		size, err := (*node.conn).Read(readBuffer)
-		if isClosedConnError(err) {
-			node.close()
-			return
-		}
-		if err != nil && err != io.EOF {
-			log.Errorf("readMessage, tcp node disconnect with error: %v, %v", (*node.conn).RemoteAddr().String(), err)
-			node.close()
-			return
-		}
-		node.onMessage(readBuffer[:size])
 	}
 }
 

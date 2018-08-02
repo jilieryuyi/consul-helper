@@ -12,7 +12,7 @@ func TestCodec_Encode(t *testing.T) {
 	data  := []byte("hello")
 	codec := &Codec{}
 	cc    := codec.Encode(msgId, data)
-
+	fmt.Println(cc)
 	mid, c, p, err := codec.Decode(cc)
 	fmt.Println(mid, c, p, err)
 	if err != nil {

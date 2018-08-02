@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/sirupsen/logrus"
 	"bytes"
+	"fmt"
 )
 
 const (
@@ -28,7 +29,7 @@ type Codec struct {}
 func (c Codec) Encode(msgId int64, msg []byte) []byte {
 	// 为了增强容错性，这里加入4字节的header支持
 
-	// 【4字节header长度】 【4字节的内容长度】 【8自己的消息id】 【实际的内容长度】
+	// 【4字节header长度】 【4字节的内容长度】 【8自己的消息id】 【实际的内容】
 	// 内容长度 == 【8自己的消息id】 + 【实际的内容长度】
 	l  := len(msg)
 	r  := make([]byte, 4 + l + 4 + 8)
@@ -39,8 +40,8 @@ func (c Codec) Encode(msgId int64, msg []byte) []byte {
 	r[3] = byte(255)
 
 	// 具体存放的内容长度是去除4字节后的长度
-	cl := l + 8
-	binary.LittleEndian.PutUint32(r[4:8], uint32(cl))
+	//cl := l + 8
+	binary.LittleEndian.PutUint32(r[4:8], uint32(l))
 	binary.LittleEndian.PutUint64(r[8:16], uint64(msgId))
 	copy(r[16:], msg)
 	return r
@@ -68,16 +69,22 @@ func (c Codec) Decode(data []byte) (int64, []byte, int, error) {
 	if len(data) < PackageMinLength {
 		return 0, nil, 0, nil
 	}
+	fmt.Println(data[startPos:startPos+4])
 	clen := int(binary.LittleEndian.Uint32(data[startPos:startPos+4]))
-	if clen < ContentMinLen {
-		return 0, nil, 0, DataLenError
-	}
-	if len(data) < clen + 8 {
+	fmt.Println(clen)
+	fmt.Println(len(data))
+	//if clen < ContentMinLen {
+	//	return 0, nil, 0, DataLenError
+	//}
+
+	if len(data) < clen + 16 {
 		return 0, nil, 0, nil
 	}
+	fmt.Println(data[startPos+4:startPos+12])
 	msgId   := int64(binary.LittleEndian.Uint64(data[startPos+4:startPos+12]))
-	content := make([]byte, len(data[startPos+12 : startPos + clen + 4 ]))
-	copy(content, data[startPos+12 : startPos + clen + 4])
-	return msgId, content, startPos + clen + 4, nil
+	fmt.Println(msgId)
+	content := make([]byte, len(data[startPos+12 : startPos + clen + 12 ]))
+	copy(content, data[startPos+12 : startPos + clen + 12])
+	return msgId, content, startPos + clen + 12, nil
 }
 
