@@ -50,16 +50,19 @@ func Decode(data []byte) (int64, []byte, int, error) {
 		}
 		startPos = i + 4
 	}
+	//fmt.Println("len=", len(data))
 	if len(data) > PackageMaxLength {
-		logrus.Infof("max len error")
+		logrus.Errorf("PackageMaxLength error")
 		return 0, nil, 0, MaxPackError
 	}
 	if len(data) < PackageMinLength {
-		return 0, nil, 0, nil
+		logrus.Errorf("PackageMinLength error")
+		return 0, nil, 0, InvalidPackage
 	}
 	clen := int(binary.LittleEndian.Uint32(data[startPos:startPos+4]))
 	if len(data) < clen + 16 {
-		return 0, nil, 0, nil
+		logrus.Errorf("len(data) < clen + 16 error")
+		return 0, nil, 0, InvalidPackage
 	}
 	msgId   := int64(binary.LittleEndian.Uint64(data[startPos+4:startPos+12]))
 	content := make([]byte, len(data[startPos+12 : startPos + clen + 12 ]))

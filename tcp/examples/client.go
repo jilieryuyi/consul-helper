@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"errors"
 )
-const Times = 10000000
+const Times = 10000000000
 func TestClient1(sig chan struct{}) {
 	address := "127.0.0.1:7771"
 	go func() {
@@ -50,7 +50,9 @@ func TestClient1(sig chan struct{}) {
 		)
 		if err != nil {
 			logrus.Errorf("NewClient error")
-			return
+			//return
+			time.Sleep(time.Second)
+			continue
 		}
 		err = nil
 		for {
@@ -79,7 +81,7 @@ func TestClient1(sig chan struct{}) {
 		client.Close()
 		if err != nil {
 			logrus.Errorf(err.Error())
-			return
+			continue
 		}
 	}
 }
@@ -135,17 +137,17 @@ func TestClient2(sig chan struct{}) {
 		wai, _, err := client.Send(data, 0)
 		if err != nil {
 			logrus.Errorf("Send fail, err=[%v]", err)
-			return
+			continue
 		}
 		res, _, err = wai.Wait(time.Second * 3)
 		if err != nil {
 			logrus.Errorf("Wait fail, err=[%v]", err)
-			return
+			continue
 		}
 		logrus.Infof("receive=[%v]", string(res))
 		if !bytes.Equal(data, res) {
 			logrus.Errorf("Equal fail, send != return")
-			return
+			continue
 		}
 	}
 }
