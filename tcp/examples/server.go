@@ -9,8 +9,14 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"github.com/sirupsen/logrus"
+	"fmt"
 )
 func main() {
+	defer func(){ // 必须要先声明defer，否则不能捕获到panic异常
+		if err:=recover();err!=nil{
+			fmt.Println("recover error: ", err) // 这里的err其实就是panic传入的内容，55
+		}
+	}()
 	address := "127.0.0.1:7771"
 	server  := tcp.NewServer(context.Background(), address, tcp.SetOnServerMessage(func(node *tcp.ClientNode, msgId int64, data []byte) {
 		logrus.Infof("server send, msgid=[%v], data=[%v]", msgId, string(data))
